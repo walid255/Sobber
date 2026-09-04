@@ -142,10 +142,10 @@ class ReminderDaemon {
       confirmText: 'Administer & Sign MAR',
       cancelText: 'Decline / Refused',
       confirmType: 'success',
-      onConfirm: () => {
+      onConfirm: async () => {
         const noteInput = document.getElementById('nurse-mar-note');
         const nurseNote = noteInput ? noteInput.value : 'Administered under nurse supervision';
-        this.store.logMedicationAdministration(log.id, 'Administered', nurseNote);
+        await this.store.logMedicationAdministration(log.id, 'Administered', nurseNote);
         
         // Play gentle confirmation sound
         this.playChime();
@@ -159,9 +159,9 @@ class ReminderDaemon {
           `Are you sure you want to mark this dose for ${log.patientName} as Refused or Missed? This will be recorded in the clinical audit log.`,
           'Mark Refused',
           'danger'
-        ).then(confirmed => {
+        ).then(async confirmed => {
           if (confirmed) {
-            this.store.logMedicationAdministration(log.id, 'Refused', 'Resident refused dose or missed medication window.');
+            await this.store.logMedicationAdministration(log.id, 'Refused', 'Resident refused dose or missed medication window.');
             this.checkReminders();
           }
         });

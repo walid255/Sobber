@@ -31,9 +31,14 @@ class SobberApiService {
    */
   async checkCloudStatus() {
     try {
-      const res = await fetch('/api/health', { 
+      const url = window.AppStore ? window.AppStore.getApiUrl('/api/health') : `/api/health?_t=${Date.now()}`;
+      const res = await fetch(url, { 
         cache: 'no-store',
-        headers: { 'Accept': 'application/json' }
+        headers: { 
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       });
       if (res.ok) {
         const data = await res.json();
@@ -61,9 +66,14 @@ class SobberApiService {
    */
   async fetchUsers() {
     try {
-      const res = await fetch('/api/users', { 
+      const url = window.AppStore ? window.AppStore.getApiUrl('/api/users') : `/api/users?_t=${Date.now()}`;
+      const res = await fetch(url, { 
         cache: 'no-store',
-        headers: { 'Accept': 'application/json' }
+        headers: { 
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       });
       if (res.ok) {
         return await res.json();
@@ -79,14 +89,20 @@ class SobberApiService {
    */
   async saveUser(userData) {
     try {
-      const res = await fetch('/api/users', {
+      const url = window.AppStore ? window.AppStore.getApiUrl('/api/users') : `/api/users?_t=${Date.now()}`;
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache'
+        },
         body: JSON.stringify(userData)
       });
       if (res.ok) {
         const json = await res.json();
-        if (window.AppStore) window.AppStore.syncFromServer();
+        if (window.AppStore) await window.AppStore.syncFromServer();
         return json;
       }
     } catch (err) {
@@ -94,7 +110,7 @@ class SobberApiService {
     }
     // Optimistic fallback
     if (window.AppStore) {
-      return window.AppStore.addUser(userData);
+      return await window.AppStore.addUser(userData);
     }
     return null;
   }
@@ -104,19 +120,24 @@ class SobberApiService {
    */
   async deleteUser(userId) {
     try {
-      const res = await fetch(`/api/users?id=${encodeURIComponent(userId)}`, {
+      const url = window.AppStore ? window.AppStore.getApiUrl(`/api/users?id=${encodeURIComponent(userId)}`) : `/api/users?id=${encodeURIComponent(userId)}&_t=${Date.now()}`;
+      const res = await fetch(url, {
         method: 'DELETE',
-        headers: { 'Accept': 'application/json' }
+        headers: { 
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       });
       if (res.ok) {
-        if (window.AppStore) window.AppStore.syncFromServer();
+        if (window.AppStore) await window.AppStore.syncFromServer();
         return await res.json();
       }
     } catch (err) {
       console.error('Error deleting user from /api/users:', err);
     }
     if (window.AppStore) {
-      window.AppStore.deleteUser(userId);
+      await window.AppStore.deleteUser(userId);
     }
     return { success: true, deletedId: userId };
   }
@@ -126,9 +147,14 @@ class SobberApiService {
    */
   async fetchPatients() {
     try {
-      const res = await fetch('/api/patients', { 
+      const url = window.AppStore ? window.AppStore.getApiUrl('/api/patients') : `/api/patients?_t=${Date.now()}`;
+      const res = await fetch(url, { 
         cache: 'no-store',
-        headers: { 'Accept': 'application/json' }
+        headers: { 
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       });
       if (res.ok) {
         return await res.json();
@@ -144,21 +170,27 @@ class SobberApiService {
    */
   async savePatient(patientData) {
     try {
-      const res = await fetch('/api/patients', {
+      const url = window.AppStore ? window.AppStore.getApiUrl('/api/patients') : `/api/patients?_t=${Date.now()}`;
+      const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache'
+        },
         body: JSON.stringify(patientData)
       });
       if (res.ok) {
         const json = await res.json();
-        if (window.AppStore) window.AppStore.syncFromServer();
+        if (window.AppStore) await window.AppStore.syncFromServer();
         return json;
       }
     } catch (err) {
       console.error('Error saving patient to /api/patients:', err);
     }
     if (window.AppStore) {
-      return window.AppStore.addPatient(patientData);
+      return await window.AppStore.addPatient(patientData);
     }
     return null;
   }

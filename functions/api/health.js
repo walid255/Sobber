@@ -7,14 +7,19 @@
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Max-Age': '86400'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma',
+  'Access-Control-Max-Age': '0'
 };
 
 const JSON_HEADERS = {
   ...CORS_HEADERS,
   'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate'
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Surrogate-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Cloudflare-CDN-Cache-Control': 'no-store'
 };
 
 function getKV(context) {
@@ -48,7 +53,7 @@ export async function onRequestGet(context) {
 
   if (kv) {
     try {
-      const pingVal = await kv.get('sobber_state');
+      const pingVal = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
       kvReadWriteOk = true;
     } catch (e) {
       errorDetail = e.message;

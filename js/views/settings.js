@@ -266,7 +266,8 @@ class SettingsView {
       let latency = 0;
       const startTime = performance.now();
       try {
-        const res = await fetch('/api/health', { cache: 'no-store' });
+        const url = window.AppStore ? window.AppStore.getApiUrl('/api/health') : `/api/health?_t=${Date.now()}`;
+        const res = await fetch(url, { cache: 'no-store' });
         latency = Math.round(performance.now() - startTime);
         isLive = res.ok;
       } catch (e) {

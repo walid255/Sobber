@@ -323,22 +323,35 @@ class InventoryView {
     document.getElementById('close-item-modal').onclick = () => window.AppModal.close();
     document.getElementById('cancel-item-btn').onclick = () => window.AppModal.close();
 
-    document.getElementById('new-item-form').onsubmit = (e) => {
+    document.getElementById('new-item-form').onsubmit = async (e) => {
       e.preventDefault();
-      window.AppStore.addInventoryItem({
-        code: document.getElementById('item-code').value.trim(),
-        name: document.getElementById('item-name').value.trim(),
-        category: document.getElementById('item-cat').value,
-        unit: document.getElementById('item-unit').value.trim(),
-        quantity: document.getElementById('item-qty').value,
-        minThreshold: document.getElementById('item-min').value,
-        cost: document.getElementById('item-cost').value,
-        batchNumber: document.getElementById('item-batch').value.trim(),
-        location: document.getElementById('item-loc').value.trim(),
-        expiryDate: '2028-01-01'
-      });
-      window.AppModal.close();
-      window.AppModal.alert('Item Added', 'Store item registered and inventory catalog updated.', 'success');
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Adding...';
+      }
+      try {
+        await window.AppStore.addInventoryItem({
+          code: document.getElementById('item-code').value.trim(),
+          name: document.getElementById('item-name').value.trim(),
+          category: document.getElementById('item-cat').value,
+          unit: document.getElementById('item-unit').value.trim(),
+          quantity: document.getElementById('item-qty').value,
+          minThreshold: document.getElementById('item-min').value,
+          cost: document.getElementById('item-cost').value,
+          batchNumber: document.getElementById('item-batch').value.trim(),
+          location: document.getElementById('item-loc').value.trim(),
+          expiryDate: '2028-01-01'
+        });
+        window.AppModal.close();
+        window.AppModal.alert('Item Added', 'Store item registered and inventory catalog updated globally.', 'success');
+      } catch (err) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Add Item';
+        }
+        window.AppModal.close();
+      }
     };
   }
 
@@ -370,10 +383,10 @@ class InventoryView {
       `,
       confirmText: isStockIn ? 'Confirm Restock' : 'Authorize Dispense',
       cancelText: 'Cancel',
-      onConfirm: () => {
+      onConfirm: async () => {
         const qty = parseInt(document.getElementById('tx-qty').value) || 1;
         const notes = document.getElementById('tx-notes').value.trim();
-        window.AppStore.updateInventoryStock(item.id, qty, type, notes);
+        await window.AppStore.updateInventoryStock(item.id, qty, type, notes);
         window.AppModal.close();
       }
     });

@@ -13,17 +13,23 @@ export default {
     const path = url.pathname;
     const method = request.method;
 
-    // CORS Headers
+    // Edge Cache Bypassing & CORS Headers
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma',
+      'Access-Control-Max-Age': '0',
       'Content-Type': 'application/json',
-      'Cache-Control': 'no-store, no-cache, must-revalidate'
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store',
+      'CDN-Cache-Control': 'no-store',
+      'Cloudflare-CDN-Cache-Control': 'no-store'
     };
 
     if (method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
+      return new Response(null, { status: 204, headers: corsHeaders });
     }
 
     const kv = env.SOBBER_KV || env.KV;
@@ -57,9 +63,9 @@ export default {
           if (!kv) {
             return new Response(JSON.stringify({ online: false, message: 'KV namespace not bound' }), { headers: corsHeaders });
           }
-          let stateData = await kv.get('sobber_state');
+          let stateData = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
           if (!stateData) {
-            stateData = await kv.get('serenitycare_state');
+            stateData = await kv.get('serenitycare_state', { type: 'text', cacheTtl: 0 });
           }
           return new Response(stateData || '{}', { headers: corsHeaders });
         }
@@ -69,6 +75,7 @@ export default {
           }
           const stateObj = await request.json();
           stateObj.lastSyncedAt = new Date().toISOString();
+          stateObj.stateVersion = Date.now();
           await kv.put('sobber_state', JSON.stringify(stateObj));
 
           // Mirror collections
@@ -78,7 +85,12 @@ export default {
           if (Array.isArray(stateObj.inventory)) await kv.put('sobber_inventory', JSON.stringify(stateObj.inventory));
           if (Array.isArray(stateObj.timetable)) await kv.put('sobber_timetable', JSON.stringify(stateObj.timetable));
 
-          return new Response(JSON.stringify({ success: true, timestamp: stateObj.lastSyncedAt }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ 
+            success: true, 
+            timestamp: stateObj.lastSyncedAt,
+            version: stateObj.stateVersion,
+            state: stateObj
+          }), { headers: corsHeaders });
         }
       }
 
@@ -86,15 +98,15 @@ export default {
       if (path === '/api/users') {
         if (method === 'GET') {
           if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
-          let usersData = await kv.get('sobber_users');
-          if (!usersData) usersData = await kv.get('serenitycare_users');
+          let usersData = await kv.get('sobber_users', { type: 'text', cacheTtl: 0 });
+          if (!usersData) usersData = await kv.get('serenitycare_users', { type: 'text', cacheTtl: 0 });
           return new Response(usersData || '[]', { headers: corsHeaders });
         }
         if (method === 'POST') {
           if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
           const userPayload = await request.json();
           let currentUsers = [];
-          const existing = await kv.get('sobber_users');
+          const existing = await kv.get('sobber_users', { type: 'text', cacheTtl: 0 });
           if (existing) {
             try { currentUsers = JSON.parse(existing); } catch {}
           }
@@ -108,24 +120,27 @@ export default {
           await kv.put('sobber_users', JSON.stringify(currentUsers));
 
           // Sync with sobber_state
-          const rawState = await kv.get('sobber_state');
+          const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+          let version = Date.now();
           if (rawState) {
             try {
               const stateObj = JSON.parse(rawState);
               stateObj.users = currentUsers;
               stateObj.lastSyncedAt = new Date().toISOString();
+              stateObj.stateVersion = Date.now();
+              version = stateObj.stateVersion;
               await kv.put('sobber_state', JSON.stringify(stateObj));
             } catch {}
           }
 
-          return new Response(JSON.stringify({ success: true, count: currentUsers.length, users: currentUsers }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, count: currentUsers.length, users: currentUsers, version }), { headers: corsHeaders });
         }
         if (method === 'DELETE') {
           if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
           const id = url.searchParams.get('id');
           if (!id) return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400, headers: corsHeaders });
           let currentUsers = [];
-          const existing = await kv.get('sobber_users');
+          const existing = await kv.get('sobber_users', { type: 'text', cacheTtl: 0 });
           if (existing) {
             try { currentUsers = JSON.parse(existing); } catch {}
           }
@@ -133,17 +148,20 @@ export default {
           await kv.put('sobber_users', JSON.stringify(currentUsers));
 
           // Sync with sobber_state
-          const rawState = await kv.get('sobber_state');
+          const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+          let version = Date.now();
           if (rawState) {
             try {
               const stateObj = JSON.parse(rawState);
               stateObj.users = currentUsers;
               stateObj.lastSyncedAt = new Date().toISOString();
+              stateObj.stateVersion = Date.now();
+              version = stateObj.stateVersion;
               await kv.put('sobber_state', JSON.stringify(stateObj));
             } catch {}
           }
 
-          return new Response(JSON.stringify({ success: true, deletedId: id }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, deletedId: id, version }), { headers: corsHeaders });
         }
       }
 
@@ -151,14 +169,14 @@ export default {
       if (path === '/api/patients') {
         if (method === 'GET') {
           if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
-          const data = await kv.get('sobber_patients');
+          const data = await kv.get('sobber_patients', { type: 'text', cacheTtl: 0 });
           return new Response(data || '[]', { headers: corsHeaders });
         }
         if (method === 'POST') {
           if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
           const payload = await request.json();
           let patients = [];
-          const existing = await kv.get('sobber_patients');
+          const existing = await kv.get('sobber_patients', { type: 'text', cacheTtl: 0 });
           if (existing) {
             try { patients = JSON.parse(existing); } catch {}
           }
@@ -171,17 +189,47 @@ export default {
           }
           await kv.put('sobber_patients', JSON.stringify(patients));
 
-          const rawState = await kv.get('sobber_state');
+          const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+          let version = Date.now();
           if (rawState) {
             try {
               const stateObj = JSON.parse(rawState);
               stateObj.patients = patients;
               stateObj.lastSyncedAt = new Date().toISOString();
+              stateObj.stateVersion = Date.now();
+              version = stateObj.stateVersion;
               await kv.put('sobber_state', JSON.stringify(stateObj));
             } catch {}
           }
 
-          return new Response(JSON.stringify({ success: true, count: patients.length, patients }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, count: patients.length, patients, version }), { headers: corsHeaders });
+        }
+        if (method === 'DELETE') {
+          if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
+          const id = url.searchParams.get('id');
+          if (!id) return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400, headers: corsHeaders });
+          let list = [];
+          const existing = await kv.get('sobber_patients', { type: 'text', cacheTtl: 0 });
+          if (existing) {
+            try { list = JSON.parse(existing); } catch {}
+          }
+          list = list.filter(p => p.id !== id);
+          await kv.put('sobber_patients', JSON.stringify(list));
+
+          const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+          let version = Date.now();
+          if (rawState) {
+            try {
+              const stateObj = JSON.parse(rawState);
+              stateObj.patients = list;
+              stateObj.lastSyncedAt = new Date().toISOString();
+              stateObj.stateVersion = Date.now();
+              version = stateObj.stateVersion;
+              await kv.put('sobber_state', JSON.stringify(stateObj));
+            } catch {}
+          }
+
+          return new Response(JSON.stringify({ success: true, deletedId: id, version }), { headers: corsHeaders });
         }
       }
 
@@ -189,14 +237,14 @@ export default {
       if (path === '/api/medications') {
         if (method === 'GET') {
           if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
-          const data = await kv.get('sobber_medications');
+          const data = await kv.get('sobber_medications', { type: 'text', cacheTtl: 0 });
           return new Response(data || '[]', { headers: corsHeaders });
         }
         if (method === 'POST') {
           if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
           const payload = await request.json();
           let logs = [];
-          const existing = await kv.get('sobber_medications');
+          const existing = await kv.get('sobber_medications', { type: 'text', cacheTtl: 0 });
           if (existing) {
             try { logs = JSON.parse(existing); } catch {}
           }
@@ -209,17 +257,20 @@ export default {
           }
           await kv.put('sobber_medications', JSON.stringify(logs));
 
-          const rawState = await kv.get('sobber_state');
+          const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+          let version = Date.now();
           if (rawState) {
             try {
               const stateObj = JSON.parse(rawState);
               stateObj.medicationLogs = logs;
               stateObj.lastSyncedAt = new Date().toISOString();
+              stateObj.stateVersion = Date.now();
+              version = stateObj.stateVersion;
               await kv.put('sobber_state', JSON.stringify(stateObj));
             } catch {}
           }
 
-          return new Response(JSON.stringify({ success: true, count: logs.length, data: logs }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, count: logs.length, data: logs, version }), { headers: corsHeaders });
         }
       }
 
@@ -227,14 +278,14 @@ export default {
       if (path === '/api/inventory') {
         if (method === 'GET') {
           if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
-          const data = await kv.get('sobber_inventory');
+          const data = await kv.get('sobber_inventory', { type: 'text', cacheTtl: 0 });
           return new Response(data || '[]', { headers: corsHeaders });
         }
         if (method === 'POST') {
           if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
           const payload = await request.json();
           let items = [];
-          const existing = await kv.get('sobber_inventory');
+          const existing = await kv.get('sobber_inventory', { type: 'text', cacheTtl: 0 });
           if (existing) {
             try { items = JSON.parse(existing); } catch {}
           }
@@ -247,17 +298,20 @@ export default {
           }
           await kv.put('sobber_inventory', JSON.stringify(items));
 
-          const rawState = await kv.get('sobber_state');
+          const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+          let version = Date.now();
           if (rawState) {
             try {
               const stateObj = JSON.parse(rawState);
               stateObj.inventory = items;
               stateObj.lastSyncedAt = new Date().toISOString();
+              stateObj.stateVersion = Date.now();
+              version = stateObj.stateVersion;
               await kv.put('sobber_state', JSON.stringify(stateObj));
             } catch {}
           }
 
-          return new Response(JSON.stringify({ success: true, count: items.length, data: items }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, count: items.length, data: items, version }), { headers: corsHeaders });
         }
       }
 
@@ -265,7 +319,7 @@ export default {
       if (path === '/api/timetable') {
         if (method === 'GET') {
           if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
-          const data = await kv.get('sobber_timetable');
+          const data = await kv.get('sobber_timetable', { type: 'text', cacheTtl: 0 });
           return new Response(data || '[]', { headers: corsHeaders });
         }
         if (method === 'POST') {
@@ -273,17 +327,20 @@ export default {
           const payload = await request.json();
           await kv.put('sobber_timetable', JSON.stringify(payload));
 
-          const rawState = await kv.get('sobber_state');
+          const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+          let version = Date.now();
           if (rawState) {
             try {
               const stateObj = JSON.parse(rawState);
               stateObj.timetable = Array.isArray(payload) ? payload : [];
               stateObj.lastSyncedAt = new Date().toISOString();
+              stateObj.stateVersion = Date.now();
+              version = stateObj.stateVersion;
               await kv.put('sobber_state', JSON.stringify(stateObj));
             } catch {}
           }
 
-          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+          return new Response(JSON.stringify({ success: true, version }), { headers: corsHeaders });
         }
       }
 

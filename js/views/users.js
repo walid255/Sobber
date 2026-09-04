@@ -200,9 +200,9 @@ class UsersView {
         const targetUser = state.users.find(u => u.id === uid);
         const name = targetUser ? targetUser.name : 'this staff user';
         window.AppModal.confirm('Delete Staff Account?', `Are you sure you want to permanently remove ${name} from SerenityCare?`, 'Delete Account', 'danger')
-          .then(confirmed => {
+          .then(async confirmed => {
             if (confirmed) {
-              window.AppStore.deleteUser(uid);
+              await window.AppStore.deleteUser(uid);
             }
           });
       };
@@ -369,8 +369,14 @@ class UsersView {
       };
     }
 
-    document.getElementById('edit-user-form').onsubmit = (e) => {
+    document.getElementById('edit-user-form').onsubmit = async (e) => {
       e.preventDefault();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Saving...';
+      }
+
       const updates = {
         name: document.getElementById('usr-name').value.trim(),
         email: document.getElementById('usr-email').value.trim(),
@@ -386,18 +392,26 @@ class UsersView {
         updates.password = newPwd.trim();
       }
 
-      window.AppStore.updateUser(userId, updates);
-      window.AppModal.close();
+      try {
+        await window.AppStore.updateUser(userId, updates);
+        window.AppModal.close();
 
-      window.AppModal.showAcceptanceCard({
-        title: 'Staff Profile Updated',
-        subtitle: `Changes to ${updates.name} and module permissions have been applied`,
-        icon: 'check-circle-2',
-        badgeText: 'PERMISSIONS UPDATED',
-        badgeColor: 'badge-medical-emerald',
-        confirmType: 'success',
-        confirmText: 'Done'
-      });
+        window.AppModal.showAcceptanceCard({
+          title: 'Staff Profile Updated',
+          subtitle: `Changes to ${updates.name} and module permissions have been replicated globally`,
+          icon: 'check-circle-2',
+          badgeText: 'PERMISSIONS UPDATED',
+          badgeColor: 'badge-medical-emerald',
+          confirmType: 'success',
+          confirmText: 'Done'
+        });
+      } catch (err) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Save Changes';
+        }
+        window.AppModal.close();
+      }
     };
 
     if (window.lucide) window.lucide.createIcons();
@@ -514,28 +528,42 @@ class UsersView {
       };
     }
 
-    document.getElementById('new-user-form').onsubmit = (e) => {
+    document.getElementById('new-user-form').onsubmit = async (e) => {
       e.preventDefault();
-      const newUser = window.AppStore.addUser({
-        name: document.getElementById('usr-name').value.trim(),
-        email: document.getElementById('usr-email').value.trim(),
-        role: document.getElementById('usr-role').value,
-        department: document.getElementById('usr-dept').value.trim(),
-        phone: document.getElementById('usr-phone').value.trim(),
-        password: document.getElementById('usr-password').value,
-        permissions: this.collectPermissions()
-      });
-      window.AppModal.close();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Creating Account...';
+      }
 
-      window.AppModal.showAcceptanceCard({
-        title: 'Staff Account Created',
-        subtitle: `${newUser.name} is registered with custom permissions`,
-        icon: 'check-circle-2',
-        badgeText: 'ACCOUNT CREATED',
-        badgeColor: 'badge-medical-emerald',
-        confirmType: 'success',
-        confirmText: 'Done'
-      });
+      try {
+        const newUser = await window.AppStore.addUser({
+          name: document.getElementById('usr-name').value.trim(),
+          email: document.getElementById('usr-email').value.trim(),
+          role: document.getElementById('usr-role').value,
+          department: document.getElementById('usr-dept').value.trim(),
+          phone: document.getElementById('usr-phone').value.trim(),
+          password: document.getElementById('usr-password').value,
+          permissions: this.collectPermissions()
+        });
+        window.AppModal.close();
+
+        window.AppModal.showAcceptanceCard({
+          title: 'Staff Account Created',
+          subtitle: `${newUser.name} is registered with custom permissions across all devices`,
+          icon: 'check-circle-2',
+          badgeText: 'ACCOUNT CREATED',
+          badgeColor: 'badge-medical-emerald',
+          confirmType: 'success',
+          confirmText: 'Done'
+        });
+      } catch (err) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Create Account';
+        }
+        window.AppModal.close();
+      }
     };
 
     if (window.lucide) window.lucide.createIcons();

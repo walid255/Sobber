@@ -121,9 +121,9 @@ class TimetableView {
       btn.onclick = () => {
         const id = btn.getAttribute('data-event-id');
         window.AppModal.confirm('Delete Schedule Event?', 'Are you sure you want to remove this event from the house timetable?', 'Delete Event', 'danger')
-          .then(confirmed => {
+          .then(async confirmed => {
             if (confirmed) {
-              window.AppStore.deleteTimetableEvent(id);
+              await window.AppStore.deleteTimetableEvent(id);
             }
           });
       };
@@ -221,18 +221,31 @@ class TimetableView {
     document.getElementById('close-tt-modal').onclick = () => window.AppModal.close();
     document.getElementById('cancel-tt-btn').onclick = () => window.AppModal.close();
 
-    document.getElementById('new-tt-form').onsubmit = (e) => {
+    document.getElementById('new-tt-form').onsubmit = async (e) => {
       e.preventDefault();
-      window.AppStore.addTimetableEvent({
-        day: document.getElementById('tt-day').value,
-        time: document.getElementById('tt-time').value.trim(),
-        title: document.getElementById('tt-title').value.trim(),
-        category: document.getElementById('tt-cat').value,
-        location: document.getElementById('tt-loc').value.trim(),
-        facilitator: document.getElementById('tt-fac').value.trim(),
-        notes: document.getElementById('tt-notes').value.trim()
-      });
-      window.AppModal.close();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Adding...';
+      }
+      try {
+        await window.AppStore.addTimetableEvent({
+          day: document.getElementById('tt-day').value,
+          time: document.getElementById('tt-time').value.trim(),
+          title: document.getElementById('tt-title').value.trim(),
+          category: document.getElementById('tt-cat').value,
+          location: document.getElementById('tt-loc').value.trim(),
+          facilitator: document.getElementById('tt-fac').value.trim(),
+          notes: document.getElementById('tt-notes').value.trim()
+        });
+        window.AppModal.close();
+      } catch (err) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Add to Schedule';
+        }
+        window.AppModal.close();
+      }
     };
   }
 }

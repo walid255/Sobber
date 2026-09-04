@@ -251,7 +251,7 @@ class BatchUploadView {
       `,
       confirmText: 'Execute Batch Import',
       cancelText: 'Cancel',
-      onConfirm: () => {
+      onConfirm: async () => {
         const mappedPatients = this.parsedRows.map(r => ({
           name: r.full_name,
           dob: r.dob,
@@ -280,7 +280,7 @@ class BatchUploadView {
           }
         }));
 
-        window.AppStore.batchImportPatients(mappedPatients);
+        await window.AppStore.batchImportPatients(mappedPatients);
         window.AppModal.close();
 
         // Redirect to Patients View if allowed, or first allowed route

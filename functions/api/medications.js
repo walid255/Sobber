@@ -10,15 +10,20 @@
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Max-Age': '86400'
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma',
+  'Access-Control-Max-Age': '0'
 };
 
 const JSON_HEADERS = {
   ...CORS_HEADERS,
   'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate'
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Surrogate-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Cloudflare-CDN-Cache-Control': 'no-store'
 };
 
 function getKV(context) {
@@ -52,13 +57,13 @@ export async function onRequestGet(context) {
       return new Response(JSON.stringify([]), { status: 200, headers: JSON_HEADERS });
     }
 
-    let raw = await kv.get('sobber_medications');
+    let raw = await kv.get('sobber_medications', { type: 'text', cacheTtl: 0 });
     let logs = [];
 
     if (raw) {
       try { logs = JSON.parse(raw); } catch {}
     } else {
-      const stateRaw = await kv.get('sobber_state');
+      const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
       if (stateRaw) {
         try {
           const parsed = JSON.parse(stateRaw);
@@ -107,7 +112,7 @@ export async function onRequestPost(context) {
     }
 
     let logs = [];
-    const raw = await kv.get('sobber_medications');
+    const raw = await kv.get('sobber_medications', { type: 'text', cacheTtl: 0 });
     if (raw) {
       try { logs = JSON.parse(raw); } catch {}
     }
@@ -136,12 +141,14 @@ export async function onRequestPost(context) {
     await kv.put('sobber_medications', JSON.stringify(logs));
 
     // Update sobber_state
-    const stateRaw = await kv.get('sobber_state');
+    const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+    let stateObj = null;
     if (stateRaw) {
       try {
-        const stateObj = JSON.parse(stateRaw);
+        stateObj = JSON.parse(stateRaw);
         stateObj.medicationLogs = logs;
         stateObj.lastSyncedAt = new Date().toISOString();
+        stateObj.stateVersion = Date.now();
         await kv.put('sobber_state', JSON.stringify(stateObj));
       } catch {}
     }
@@ -150,7 +157,8 @@ export async function onRequestPost(context) {
       success: true,
       message: 'Medication administration record saved to SOBBER_KV',
       count: logs.length,
-      data: logs
+      data: logs,
+      version: stateObj?.stateVersion || Date.now()
     }), {
       status: 200,
       headers: JSON_HEADERS

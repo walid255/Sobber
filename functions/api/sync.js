@@ -6,21 +6,29 @@
  * house timetable, reminders, and facility configuration) across all
  * connected browsers via Cloudflare Workers KV.
  * 
- * KV Bindings: SOBBER_KV (primary) or KV (fallback, auto-discovered)
- * Storage Key: "sobber_state"
+ * Enforces strong edge-cache bypassing with strict headers:
+ * - Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0
+ * - Surrogate-Control: no-store
+ * - CDN-Cache-Control: no-store
+ * - Cloudflare-CDN-Cache-Control: no-store
  */
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Max-Age': '86400'
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma',
+  'Access-Control-Max-Age': '0'
 };
 
 const JSON_HEADERS = {
   ...CORS_HEADERS,
   'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Surrogate-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Cloudflare-CDN-Cache-Control': 'no-store'
 };
 
 // Initial clean production state seeded automatically if KV namespace is brand new
@@ -79,7 +87,8 @@ const SEED_SOBBER_STATE = {
       action: 'Production Ready',
       details: 'SerenityCare production environment initialized with zero dummy records'
     }
-  ]
+  ],
+  stateVersion: Date.now()
 };
 
 function getKV(context) {
@@ -122,17 +131,17 @@ export async function onRequestGet(context) {
       });
     }
 
-    let rawData = await kv.get('sobber_state');
+    // Direct primary read bypassing any intermediate KV caching
+    let rawData = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
     if (!rawData) {
-      // Check legacy key fallback
-      rawData = await kv.get('serenitycare_state');
+      rawData = await kv.get('serenitycare_state', { type: 'text', cacheTtl: 0 });
     }
 
     if (!rawData) {
-      // Key does not exist yet: initialize with seed production state
       const initialWithTimestamp = {
         ...SEED_SOBBER_STATE,
-        lastSyncedAt: new Date().toISOString()
+        lastSyncedAt: new Date().toISOString(),
+        stateVersion: Date.now()
       };
       await kv.put('sobber_state', JSON.stringify(initialWithTimestamp));
       await kv.put('sobber_users', JSON.stringify(initialWithTimestamp.users));
@@ -203,8 +212,9 @@ export async function onRequestPost(context) {
 
     const stateToSave = { ...payload };
     stateToSave.lastSyncedAt = new Date().toISOString();
+    stateToSave.stateVersion = Date.now();
 
-    // Persist full system snapshot to sobber_state
+    // Persist full system snapshot to primary KV storage
     await kv.put('sobber_state', JSON.stringify(stateToSave));
 
     // Mirror granular collections for dedicated endpoints
@@ -224,12 +234,15 @@ export async function onRequestPost(context) {
       await kv.put('sobber_timetable', JSON.stringify(stateToSave.timetable));
     }
 
+    // Read-Your-Writes confirmation pattern: Return the canonical state with fresh version
     return new Response(JSON.stringify({
       success: true,
       message: 'SerenityCare Sober House state successfully written to Cloudflare Workers KV',
       timestamp: stateToSave.lastSyncedAt,
+      version: stateToSave.stateVersion,
       usersCount: stateToSave.users?.length || 0,
-      patientsCount: stateToSave.patients?.length || 0
+      patientsCount: stateToSave.patients?.length || 0,
+      state: stateToSave
     }), {
       status: 200,
       headers: JSON_HEADERS

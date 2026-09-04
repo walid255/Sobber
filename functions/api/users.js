@@ -2,23 +2,25 @@
  * Cloudflare Pages Function: /api/users
  * 
  * Provides dedicated Staff & RBAC user synchronization across browsers
- * via Cloudflare Workers KV.
- * 
- * KV Binding: SOBBER_KV (primary) or KV (fallback)
- * Storage Key: "sobber_users"
+ * via Cloudflare Workers KV with edge cache bypassing and read-your-writes guarantees.
  */
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Max-Age': '86400'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma',
+  'Access-Control-Max-Age': '0'
 };
 
 const JSON_HEADERS = {
   ...CORS_HEADERS,
   'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate'
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Surrogate-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Cloudflare-CDN-Cache-Control': 'no-store'
 };
 
 const DEFAULT_ADMIN_USER = {
@@ -78,10 +80,9 @@ export async function onRequestGet(context) {
       });
     }
 
-    let raw = await kv.get('sobber_users');
+    let raw = await kv.get('sobber_users', { type: 'text', cacheTtl: 0 });
     if (!raw) {
-      // Check legacy key
-      raw = await kv.get('serenitycare_users');
+      raw = await kv.get('serenitycare_users', { type: 'text', cacheTtl: 0 });
     }
 
     let users = [];
@@ -91,9 +92,8 @@ export async function onRequestGet(context) {
       } catch {}
     }
 
-    // If still empty, attempt to read from sobber_state
     if (!users || users.length === 0) {
-      const stateRaw = await kv.get('sobber_state');
+      const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
       if (stateRaw) {
         try {
           const parsedState = JSON.parse(stateRaw);
@@ -162,7 +162,7 @@ export async function onRequestPost(context) {
     if (Array.isArray(payload)) {
       usersList = payload;
     } else if (typeof payload === 'object') {
-      const raw = await kv.get('sobber_users') || await kv.get('serenitycare_users');
+      const raw = await kv.get('sobber_users', { type: 'text', cacheTtl: 0 });
       if (raw) {
         try { usersList = JSON.parse(raw); } catch {}
       }
@@ -181,16 +181,18 @@ export async function onRequestPost(context) {
       }
     }
 
-    // Persist to sobber_users in KV
+    // Persist to sobber_users in primary KV storage
     await kv.put('sobber_users', JSON.stringify(usersList));
 
-    // Also update sobber_state if present
-    const rawState = await kv.get('sobber_state') || await kv.get('serenitycare_state');
+    // Also update sobber_state
+    const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+    let stateObj = null;
     if (rawState) {
       try {
-        const stateObj = JSON.parse(rawState);
+        stateObj = JSON.parse(rawState);
         stateObj.users = usersList;
         stateObj.lastSyncedAt = new Date().toISOString();
+        stateObj.stateVersion = Date.now();
         await kv.put('sobber_state', JSON.stringify(stateObj));
       } catch {}
     }
@@ -198,7 +200,8 @@ export async function onRequestPost(context) {
     return new Response(JSON.stringify({ 
       success: true, 
       count: usersList.length, 
-      users: usersList 
+      users: usersList,
+      version: stateObj?.stateVersion || Date.now()
     }), {
       status: 200,
       headers: JSON_HEADERS
@@ -235,7 +238,7 @@ export async function onRequestDelete(context) {
       return new Response(JSON.stringify({ error: 'User ID is required' }), { status: 400, headers: JSON_HEADERS });
     }
 
-    const raw = await kv.get('sobber_users');
+    const raw = await kv.get('sobber_users', { type: 'text', cacheTtl: 0 });
     let usersList = [];
     if (raw) {
       try { usersList = JSON.parse(raw); } catch {}
@@ -248,12 +251,13 @@ export async function onRequestDelete(context) {
     await kv.put('sobber_users', JSON.stringify(usersList));
 
     // Also update in sobber_state
-    const rawState = await kv.get('sobber_state');
+    const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
     if (rawState) {
       try {
         const stateObj = JSON.parse(rawState);
         stateObj.users = usersList;
         stateObj.lastSyncedAt = new Date().toISOString();
+        stateObj.stateVersion = Date.now();
         await kv.put('sobber_state', JSON.stringify(stateObj));
       } catch {}
     }
@@ -262,6 +266,7 @@ export async function onRequestDelete(context) {
       success: true, 
       deletedId: userId,
       remainingCount: usersList.length,
+      users: usersList,
       wasRemoved: beforeLen !== usersList.length
     }), {
       status: 200,

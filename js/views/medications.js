@@ -371,21 +371,35 @@ class MedicationsView {
     document.getElementById('close-rx-modal').onclick = () => window.AppModal.close();
     document.getElementById('cancel-rx-btn').onclick = () => window.AppModal.close();
 
-    document.getElementById('new-rx-form').onsubmit = (e) => {
+    document.getElementById('new-rx-form').onsubmit = async (e) => {
       e.preventDefault();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Authorizing...';
+      }
+
       const patientId = document.getElementById('rx-patient-select').value;
       const times = document.getElementById('rx-times').value.split(',').map(t => t.trim()).filter(Boolean);
 
-      window.AppStore.addPrescription(patientId, {
-        medicationName: document.getElementById('rx-med-name').value.trim(),
-        dosage: document.getElementById('rx-dosage').value.trim(),
-        frequency: document.getElementById('rx-frequency').value,
-        times: times.length > 0 ? times : ['08:00'],
-        instructions: document.getElementById('rx-notes').value.trim()
-      });
+      try {
+        await window.AppStore.addPrescription(patientId, {
+          medicationName: document.getElementById('rx-med-name').value.trim(),
+          dosage: document.getElementById('rx-dosage').value.trim(),
+          frequency: document.getElementById('rx-frequency').value,
+          times: times.length > 0 ? times : ['08:00'],
+          instructions: document.getElementById('rx-notes').value.trim()
+        });
 
-      window.AppModal.close();
-      window.AppModal.alert('Prescription Authorized', 'New prescription order logged and scheduled into today\'s MAR queue.', 'success');
+        window.AppModal.close();
+        window.AppModal.alert('Prescription Authorized', 'New prescription order logged and scheduled into today\'s MAR queue.', 'success');
+      } catch (err) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Authorize Prescription';
+        }
+        window.AppModal.close();
+      }
     };
 
     if (window.lucide) {

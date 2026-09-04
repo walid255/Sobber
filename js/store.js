@@ -111,13 +111,15 @@ class ReactiveStore {
   }
 
   getApiUrl(endpoint) {
+    let base = endpoint;
     try {
       const custom = localStorage.getItem('sobber_cloud_endpoint');
       if (custom && custom.trim().startsWith('http')) {
-        return custom.trim().replace(/\/+$/, '') + endpoint;
+        base = custom.trim().replace(/\/+$/, '') + endpoint;
       }
     } catch (e) {}
-    return endpoint;
+    const sep = base.includes('?') ? '&' : '?';
+    return `${base}${sep}_t=${Date.now()}`;
   }
 
   loadState() {
@@ -143,8 +145,9 @@ class ReactiveStore {
     }
 
     if (syncToCloud) {
-      this.pushToServer(currentState);
+      return this.pushToServer(currentState);
     }
+    return Promise.resolve({ success: true, localOnly: true });
   }
 
   /**
@@ -158,7 +161,11 @@ class ReactiveStore {
       const url = this.getApiUrl('/api/sync');
       const res = await fetch(url, { 
         cache: 'no-store',
-        headers: { 'Accept': 'application/json' }
+        headers: { 
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache'
+        }
       });
 
       if (res.ok) {
@@ -207,7 +214,12 @@ class ReactiveStore {
   applyRemoteState(remoteState, saveToLocal = true) {
     if (!remoteState || !Array.isArray(remoteState.users)) return;
 
-    // Check if remote state has newer data
+    // Check version timestamp to ensure monotonic updates
+    if (remoteState.stateVersion && this.state.stateVersion && remoteState.stateVersion < this.state.stateVersion) {
+      // Remote is older than our local state, don't overwrite with stale replica
+      return;
+    }
+
     const currentUserId = this.state.currentUser ? this.state.currentUser.id : null;
 
     // Merge collections
@@ -220,6 +232,9 @@ class ReactiveStore {
     if (remoteState.reminders) this.state.reminders = remoteState.reminders;
     if (remoteState.facility) {
       this.state.facility = { ...this.state.facility, ...remoteState.facility };
+    }
+    if (remoteState.stateVersion) {
+      this.state.stateVersion = remoteState.stateVersion;
     }
 
     // Refresh active session profile if user exists in updated list
@@ -239,7 +254,7 @@ class ReactiveStore {
     }
 
     this.emit('state:changed', this.state);
-    this.emit('sync:updated', { timestamp: this.lastSyncedAt });
+    this.emit('sync:updated', { timestamp: this.lastSyncedAt, version: this.state.stateVersion });
   }
 
   /**
@@ -248,6 +263,7 @@ class ReactiveStore {
   async pushToServer(stateToPush) {
     const payload = stateToPush || this.state;
     payload.lastSyncedAt = new Date().toISOString();
+    payload.stateVersion = Date.now();
 
     // Instant local broadcast to other tabs
     if (this.broadcastChannel) {
@@ -262,7 +278,9 @@ class ReactiveStore {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Pragma': 'no-cache'
         },
         body: JSON.stringify(payload)
       });
@@ -272,27 +290,34 @@ class ReactiveStore {
         if (json.success !== false) {
           this.isCloudConnected = true;
           this.cloudError = null;
-          this.lastSyncedAt = payload.lastSyncedAt;
-          this.emit('sync:success', { timestamp: this.lastSyncedAt });
+          this.lastSyncedAt = json.timestamp || payload.lastSyncedAt;
+          this.state.stateVersion = json.version || payload.stateVersion;
+          this.emit('sync:success', { timestamp: this.lastSyncedAt, version: this.state.stateVersion });
+          return { success: true, timestamp: this.lastSyncedAt, version: this.state.stateVersion };
         } else {
           this.isCloudConnected = false;
           this.cloudError = json.error || 'Cloudflare KV save failed';
           this.emit('sync:error', { error: this.cloudError });
+          return { success: false, error: this.cloudError };
         }
       } else {
         this.isCloudConnected = false;
+        let errStr = `HTTP ${res.status}`;
         try {
           const errData = await res.json();
-          this.cloudError = errData.error || errData.message || `HTTP ${res.status}`;
+          errStr = errData.error || errData.message || errStr;
         } catch {
-          this.cloudError = `HTTP ${res.status} from cloud`;
+          errStr = `HTTP ${res.status} from cloud endpoint`;
         }
+        this.cloudError = errStr;
         this.emit('sync:error', { error: this.cloudError });
+        return { success: false, error: this.cloudError };
       }
     } catch (err) {
       this.isCloudConnected = false;
       this.cloudError = err.message;
       this.emit('sync:error', { error: err.message });
+      return { success: false, error: err.message };
     }
   }
 
@@ -380,10 +405,13 @@ class ReactiveStore {
   /**
    * Mutate state and broadcast globally
    */
-  mutate(mutationFn, eventName = 'state:changed', eventPayload = null) {
+  async mutate(mutationFn, eventName = 'state:changed', eventPayload = null) {
     mutationFn(this.state);
-    this.saveState(this.state, true);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+    } catch (e) {}
     this.emit(eventName, eventPayload);
+    return await this.pushToServer(this.state);
   }
 
   // --- AUTH ACTIONS ---
@@ -452,7 +480,7 @@ class ReactiveStore {
     }
   }
 
-  addUser(userData) {
+  async addUser(userData) {
     const defaultPerms = {
       dashboard: true,
       patients: userData.role === 'admin' || userData.role === 'doctor',
@@ -473,8 +501,26 @@ class ReactiveStore {
       permissions: userData.permissions || defaultPerms,
       ...userData
     };
-    this.mutate(s => {
-      s.users.push(newUser);
+
+    // Direct write to /api/users
+    try {
+      await fetch(this.getApiUrl('/api/users'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify(newUser)
+      });
+    } catch (e) {
+      console.warn('Direct /api/users write failed, continuing with state replication:', e);
+    }
+
+    await this.mutate(s => {
+      const exists = s.users.some(u => u.id === newUser.id);
+      if (!exists) s.users.push(newUser);
       s.activityLogs.unshift({
         id: 'act_' + Date.now(),
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
@@ -484,21 +530,12 @@ class ReactiveStore {
       });
     }, 'user:added', newUser);
 
-    // Direct background sync to /api/users
-    try {
-      fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newUser)
-      }).catch(() => {});
-    } catch (e) {}
-
     return newUser;
   }
 
-  updateUser(userId, updates) {
+  async updateUser(userId, updates) {
     let updated = null;
-    this.mutate(s => {
+    await this.mutate(s => {
       const idx = s.users.findIndex(u => u.id === userId);
       if (idx !== -1) {
         s.users[idx] = { ...s.users[idx], ...updates };
@@ -511,32 +548,43 @@ class ReactiveStore {
 
     if (updated) {
       try {
-        fetch('/api/users', {
+        await fetch(this.getApiUrl('/api/users'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-store, no-cache',
+            'Pragma': 'no-cache'
+          },
           body: JSON.stringify(updated)
-        }).catch(() => {});
+        });
       } catch (e) {}
     }
+    return updated;
   }
 
-  deleteUser(userId) {
-    this.mutate(s => {
+  async deleteUser(userId) {
+    await this.mutate(s => {
       s.users = s.users.filter(u => u.id !== userId);
     }, 'user:deleted', userId);
 
     try {
-      fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.state.users)
-      }).catch(() => {});
+      await fetch(this.getApiUrl(`/api/users?id=${encodeURIComponent(userId)}`), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
     } catch (e) {}
+    return true;
   }
 
   // --- PATIENTS ACTIONS ---
 
-  addPatient(patientData) {
+  async addPatient(patientData) {
     const newId = 'PAT-' + (100 + this.state.patients.length + 1);
     const newPatient = {
       id: newId,
@@ -552,8 +600,24 @@ class ReactiveStore {
       ...patientData
     };
 
-    this.mutate(s => {
-      s.patients.unshift(newPatient);
+    try {
+      await fetch(this.getApiUrl('/api/patients'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify(newPatient)
+      });
+    } catch (e) {
+      console.warn('Direct /api/patients write failed, continuing with full sync:', e);
+    }
+
+    await this.mutate(s => {
+      const exists = s.patients.some(p => p.id === newPatient.id);
+      if (!exists) s.patients.unshift(newPatient);
       s.activityLogs.unshift({
         id: 'act_' + Date.now(),
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
@@ -566,17 +630,35 @@ class ReactiveStore {
     return newPatient;
   }
 
-  updatePatient(patientId, updates) {
-    this.mutate(s => {
+  async updatePatient(patientId, updates) {
+    let updated = null;
+    await this.mutate(s => {
       const idx = s.patients.findIndex(p => p.id === patientId);
       if (idx !== -1) {
         s.patients[idx] = { ...s.patients[idx], ...updates };
+        updated = s.patients[idx];
       }
     }, 'patient:updated', { patientId, updates });
+
+    if (updated) {
+      try {
+        await fetch(this.getApiUrl('/api/patients'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-store, no-cache',
+            'Pragma': 'no-cache'
+          },
+          body: JSON.stringify(updated)
+        });
+      } catch (e) {}
+    }
+    return updated;
   }
 
-  deletePatient(patientId) {
-    this.mutate(s => {
+  async deletePatient(patientId) {
+    await this.mutate(s => {
       const patient = s.patients.find(p => p.id === patientId);
       s.patients = s.patients.filter(p => p.id !== patientId);
       // Remove any pending MAR logs for this patient
@@ -592,48 +674,74 @@ class ReactiveStore {
         });
       }
     }, 'patient:deleted', patientId);
+
+    try {
+      await fetch(this.getApiUrl(`/api/patients?id=${encodeURIComponent(patientId)}`), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+    } catch (e) {}
+    return true;
   }
 
-  batchImportPatients(patientList) {
+  async batchImportPatients(patientList) {
     const added = [];
-    this.mutate(s => {
-      patientList.forEach((data, index) => {
-        const newId = 'PAT-' + (100 + s.patients.length + 1 + index);
-        const patient = {
-          id: newId,
-          admissionDate: data.admissionDate || new Date().toISOString().split('T')[0],
-          stage: data.stage || 'Inpatient Recovery',
-          sobrietyDays: parseInt(data.sobrietyDays) || 1,
-          graduationQualified: false,
-          graduationDate: null,
-          vitals: [],
-          progressNotes: [],
-          prescriptions: [],
-          photo: data.photo || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80',
-          nextOfKin: data.nextOfKin || {
-            name: data.nok_name || 'Not Provided',
-            relationship: data.nok_rel || 'Relative',
-            phone: data.nok_phone || '',
-            email: '',
-            address: '',
-            emergencyConsent: true
-          },
-          psychiatricHistory: data.psychiatricHistory || {
-            primarySubstance: data.primarySubstance || 'Alcohol',
-            secondarySubstance: data.secondarySubstance || 'None',
-            addictionDurationYears: parseInt(data.addictionYears) || 1,
-            priorRehabs: parseInt(data.priorRehabs) || 0,
-            diagnoses: data.diagnoses ? data.diagnoses.split(';') : ['Substance Use Disorder'],
-            suicideRisk: data.suicideRisk || 'Low',
-            allergies: data.allergies ? data.allergies.split(';') : ['None reported'],
-            notes: data.notes || 'Batch imported intake profile.'
-          },
-          ...data
-        };
-        s.patients.unshift(patient);
-        added.push(patient);
-      });
+    patientList.forEach((data, index) => {
+      const newId = 'PAT-' + (100 + this.state.patients.length + 1 + index);
+      const patient = {
+        id: newId,
+        admissionDate: data.admissionDate || new Date().toISOString().split('T')[0],
+        stage: data.stage || 'Inpatient Recovery',
+        sobrietyDays: parseInt(data.sobrietyDays) || 1,
+        graduationQualified: false,
+        graduationDate: null,
+        vitals: [],
+        progressNotes: [],
+        prescriptions: [],
+        photo: data.photo || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80',
+        nextOfKin: data.nextOfKin || {
+          name: data.nok_name || 'Not Provided',
+          relationship: data.nok_rel || 'Relative',
+          phone: data.nok_phone || '',
+          email: '',
+          address: '',
+          emergencyConsent: true
+        },
+        psychiatricHistory: data.psychiatricHistory || {
+          primarySubstance: data.primarySubstance || 'Alcohol',
+          secondarySubstance: data.secondarySubstance || 'None',
+          addictionDurationYears: parseInt(data.addictionYears) || 1,
+          priorRehabs: parseInt(data.priorRehabs) || 0,
+          diagnoses: data.diagnoses ? (Array.isArray(data.diagnoses) ? data.diagnoses : data.diagnoses.split(';')) : ['Substance Use Disorder'],
+          suicideRisk: data.suicideRisk || 'Low',
+          allergies: data.allergies ? (Array.isArray(data.allergies) ? data.allergies : data.allergies.split(';')) : ['None reported'],
+          notes: data.notes || 'Batch imported intake profile.'
+        },
+        ...data
+      };
+      added.push(patient);
+    });
 
+    try {
+      await fetch(this.getApiUrl('/api/patients'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify(added)
+      });
+    } catch (e) {}
+
+    await this.mutate(s => {
+      added.forEach(p => s.patients.unshift(p));
       s.activityLogs.unshift({
         id: 'act_' + Date.now(),
         timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
@@ -646,7 +754,7 @@ class ReactiveStore {
     return added;
   }
 
-  addProgressNote(patientId, noteData) {
+  async addProgressNote(patientId, noteData) {
     const note = {
       id: 'note_' + Date.now(),
       date: new Date().toISOString().replace('T', ' ').substring(0, 16),
@@ -654,7 +762,7 @@ class ReactiveStore {
       ...noteData
     };
 
-    this.mutate(s => {
+    await this.mutate(s => {
       const patient = s.patients.find(p => p.id === patientId);
       if (patient) {
         if (!patient.progressNotes) patient.progressNotes = [];
@@ -665,14 +773,14 @@ class ReactiveStore {
     return note;
   }
 
-  addVitalRecord(patientId, vitalData) {
+  async addVitalRecord(patientId, vitalData) {
     const vital = {
       date: new Date().toISOString().replace('T', ' ').substring(0, 16),
       recordedBy: this.state.currentUser ? this.state.currentUser.name : 'Nurse',
       ...vitalData
     };
 
-    this.mutate(s => {
+    await this.mutate(s => {
       const patient = s.patients.find(p => p.id === patientId);
       if (patient) {
         if (!patient.vitals) patient.vitals = [];
@@ -683,7 +791,7 @@ class ReactiveStore {
     return vital;
   }
 
-  addPrescription(patientId, rxData) {
+  async addPrescription(patientId, rxData) {
     const rx = {
       id: 'rx_' + Date.now().toString(36),
       startDate: new Date().toISOString().split('T')[0],
@@ -692,7 +800,7 @@ class ReactiveStore {
       ...rxData
     };
 
-    this.mutate(s => {
+    await this.mutate(s => {
       const patient = s.patients.find(p => p.id === patientId);
       if (patient) {
         if (!patient.prescriptions) patient.prescriptions = [];
@@ -723,14 +831,16 @@ class ReactiveStore {
 
   // --- MEDICATION MAR ACTIONS ---
 
-  logMedicationAdministration(logId, status, notes = '') {
-    this.mutate(s => {
+  async logMedicationAdministration(logId, status, notes = '') {
+    let updatedLog = null;
+    await this.mutate(s => {
       const log = s.medicationLogs.find(l => l.id === logId);
       if (log) {
         log.status = status; // Administered, Refused, Missed
         log.administeredAt = new Date().toISOString().replace('T', ' ').substring(0, 16);
         log.nurseName = s.currentUser ? s.currentUser.name : 'Staff Nurse';
         log.notes = notes || log.notes;
+        updatedLog = { ...log };
 
         s.activityLogs.unshift({
           id: 'act_' + Date.now(),
@@ -741,12 +851,28 @@ class ReactiveStore {
         });
       }
     }, 'medication:logged', { logId, status });
+
+    if (updatedLog) {
+      try {
+        await fetch(this.getApiUrl('/api/medications'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-store, no-cache',
+            'Pragma': 'no-cache'
+          },
+          body: JSON.stringify(updatedLog)
+        });
+      } catch (e) {}
+    }
+    return updatedLog;
   }
 
   // --- GRADUATION ACTIONS ---
 
-  markGraduationQualified(patientId, qualified, graduationDate = null) {
-    this.mutate(s => {
+  async markGraduationQualified(patientId, qualified, graduationDate = null) {
+    await this.mutate(s => {
       const patient = s.patients.find(p => p.id === patientId);
       if (patient) {
         patient.graduationQualified = qualified;
@@ -768,7 +894,7 @@ class ReactiveStore {
 
   // --- INVENTORY ACTIONS ---
 
-  addInventoryItem(itemData) {
+  async addInventoryItem(itemData) {
     const newItem = {
       id: 'INV-' + String(this.state.inventory.length + 1).padStart(3, '0'),
       code: itemData.code || 'ITEM-' + Date.now().toString(36).toUpperCase(),
@@ -778,7 +904,20 @@ class ReactiveStore {
       ...itemData
     };
 
-    this.mutate(s => {
+    try {
+      await fetch(this.getApiUrl('/api/inventory'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify(newItem)
+      });
+    } catch (e) {}
+
+    await this.mutate(s => {
       s.inventory.push(newItem);
       s.inventoryTransactions.unshift({
         id: 'TX-' + Date.now(),
@@ -795,9 +934,10 @@ class ReactiveStore {
     return newItem;
   }
 
-  updateInventoryStock(itemId, quantityChange, type = 'Dispensed', notes = '') {
+  async updateInventoryStock(itemId, quantityChange, type = 'Dispensed', notes = '') {
     const qty = parseInt(quantityChange);
-    this.mutate(s => {
+    let updatedItem = null;
+    await this.mutate(s => {
       const item = s.inventory.find(i => i.id === itemId);
       if (item) {
         if (type === 'Dispensed') {
@@ -805,6 +945,7 @@ class ReactiveStore {
         } else if (type === 'Stock In') {
           item.quantity += qty;
         }
+        updatedItem = { ...item };
 
         s.inventoryTransactions.unshift({
           id: 'TX-' + Date.now(),
@@ -818,35 +959,79 @@ class ReactiveStore {
         });
       }
     }, 'inventory:updated', { itemId, quantityChange, type });
+
+    if (updatedItem) {
+      try {
+        await fetch(this.getApiUrl('/api/inventory'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-store, no-cache',
+            'Pragma': 'no-cache'
+          },
+          body: JSON.stringify(updatedItem)
+        });
+      } catch (e) {}
+    }
+    return updatedItem;
   }
 
   // --- TIMETABLE ACTIONS ---
 
-  addTimetableEvent(eventData) {
+  async addTimetableEvent(eventData) {
     const newEvent = {
       id: 'TT-' + Date.now().toString(36),
       ...eventData
     };
 
-    this.mutate(s => {
+    await this.mutate(s => {
       s.timetable.push(newEvent);
     }, 'timetable:added', newEvent);
+
+    try {
+      await fetch(this.getApiUrl('/api/timetable'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify(this.state.timetable)
+      });
+    } catch (e) {}
 
     return newEvent;
   }
 
-  deleteTimetableEvent(eventId) {
-    this.mutate(s => {
+  async deleteTimetableEvent(eventId) {
+    await this.mutate(s => {
       s.timetable = s.timetable.filter(e => e.id !== eventId);
     }, 'timetable:deleted', eventId);
+
+    try {
+      await fetch(this.getApiUrl('/api/timetable'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify(this.state.timetable)
+      });
+    } catch (e) {}
+    return true;
   }
 
   // --- FACILITY ACTIONS ---
 
-  updateFacility(facilityUpdates) {
-    this.mutate(s => {
+  async updateFacility(facilityUpdates) {
+    await this.mutate(s => {
       s.facility = { ...s.facility, ...facilityUpdates };
     }, 'facility:updated', facilityUpdates);
+    return this.state.facility;
   }
 
   // Reset to clean production initial state

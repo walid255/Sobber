@@ -411,8 +411,13 @@ class PatientsView {
     document.getElementById('close-modal-x').onclick = () => window.AppModal.close();
     document.getElementById('cancel-add-patient-btn').onclick = () => window.AppModal.close();
 
-    document.getElementById('add-patient-form').onsubmit = (e) => {
+    document.getElementById('add-patient-form').onsubmit = async (e) => {
       e.preventDefault();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Admitting...';
+      }
 
       const dob = document.getElementById('new-dob').value;
       const age = new Date().getFullYear() - new Date(dob).getFullYear();
@@ -447,12 +452,13 @@ class PatientsView {
         }
       };
 
-      const created = window.AppStore.addPatient(newPatientData);
-      window.AppModal.close();
+      try {
+        const created = await window.AppStore.addPatient(newPatientData);
+        window.AppModal.close();
 
-      // Show acceptance success card
-      window.AppModal.showAcceptanceCard({
-        title: 'Resident Admitted Successfully',
+        // Show acceptance success card
+        window.AppModal.showAcceptanceCard({
+          title: 'Resident Admitted Successfully',
         subtitle: `${created.name} is now registered in the medical system`,
         icon: 'check-circle-2',
         badgeText: 'ADMISSION COMPLETED',
@@ -471,6 +477,13 @@ class PatientsView {
           this.openPatientDetailsModal(created.id);
         }
       });
+      } catch (err) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Confirm Admission';
+        }
+        window.AppModal.close();
+      }
     };
   }
 
@@ -978,23 +991,25 @@ class PatientsView {
     document.getElementById('close-edit-patient-modal').onclick = () => window.AppModal.close();
     document.getElementById('cancel-edit-patient-btn').onclick = () => window.AppModal.close();
 
-    document.getElementById('edit-patient-form').onsubmit = (e) => {
+    document.getElementById('edit-patient-form').onsubmit = async (e) => {
       e.preventDefault();
-      const dob = document.getElementById('edit-dob').value;
-      const age = new Date().getFullYear() - new Date(dob).getFullYear();
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Updating...';
+      }
 
       const updates = {
         name: document.getElementById('edit-name').value.trim(),
-        dob: dob,
-        age: age || patient.age,
+        dob: document.getElementById('edit-dob').value,
         gender: document.getElementById('edit-gender').value,
         bloodGroup: document.getElementById('edit-blood').value,
         phone: document.getElementById('edit-phone').value.trim(),
-        roomNumber: document.getElementById('edit-room').value.trim(),
-        bedNumber: document.getElementById('edit-bed').value.trim(),
+        photo: document.getElementById('edit-photo').value || patient.photo,
+        roomNumber: document.getElementById('edit-room').value,
+        bedNumber: document.getElementById('edit-bed').value,
         stage: document.getElementById('edit-stage').value,
-        sobrietyDays: parseInt(document.getElementById('edit-streak').value) || 0,
-        photo: document.getElementById('edit-photo').value.trim() || patient.photo,
+        sobrietyDays: parseInt(document.getElementById('edit-sobriety').value) || 1,
         nextOfKin: {
           name: document.getElementById('edit-nok-name').value.trim(),
           relationship: document.getElementById('edit-nok-rel').value.trim(),
@@ -1014,22 +1029,30 @@ class PatientsView {
         }
       };
 
-      window.AppStore.updatePatient(patientId, updates);
-      window.AppModal.close();
+      try {
+        await window.AppStore.updatePatient(patientId, updates);
+        window.AppModal.close();
 
-      window.AppModal.showAcceptanceCard({
-        title: 'Resident Profile Updated',
-        subtitle: `Clinical records for ${updates.name} (${patient.id}) have been saved`,
-        icon: 'check-circle-2',
-        badgeText: 'PROFILE UPDATED',
-        badgeColor: 'badge-medical-emerald',
-        confirmType: 'success',
-        confirmText: 'View Dossier',
-        cancelText: 'Close',
-        onConfirm: () => {
-          this.openPatientDetailsModal(patientId);
+        window.AppModal.showAcceptanceCard({
+          title: 'Resident Profile Updated',
+          subtitle: `Clinical records for ${updates.name} (${patient.id}) have been saved`,
+          icon: 'check-circle-2',
+          badgeText: 'PROFILE UPDATED',
+          badgeColor: 'badge-medical-emerald',
+          confirmType: 'success',
+          confirmText: 'View Dossier',
+          cancelText: 'Close',
+          onConfirm: () => {
+            this.openPatientDetailsModal(patientId);
+          }
+        });
+      } catch (err) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Save Changes';
         }
-      });
+        window.AppModal.close();
+      }
     };
 
     if (window.lucide) window.lucide.createIcons();
@@ -1045,9 +1068,9 @@ class PatientsView {
       `Are you sure you want to permanently delete resident ${patient.name} (${patient.id})? All associated daily vitals, progress notes, and MAR medication history will be deleted.`,
       'Delete Record',
       'danger'
-    ).then(confirmed => {
+    ).then(async confirmed => {
       if (confirmed) {
-        window.AppStore.deletePatient(patientId);
+        await window.AppStore.deletePatient(patientId);
         if (fromModal) {
           window.AppModal.close();
         }

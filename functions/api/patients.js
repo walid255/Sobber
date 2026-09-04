@@ -2,23 +2,25 @@
  * Cloudflare Pages Function: /api/patients
  * 
  * Provides dedicated Resident / Patient Registry CRUD and batch intake
- * via Cloudflare Workers KV.
- * 
- * KV Binding: SOBBER_KV (primary) or KV (fallback)
- * Storage Key: "sobber_patients"
+ * via Cloudflare Workers KV with edge cache bypassing and read-your-writes guarantees.
  */
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Max-Age': '86400'
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma',
+  'Access-Control-Max-Age': '0'
 };
 
 const JSON_HEADERS = {
   ...CORS_HEADERS,
   'Content-Type': 'application/json',
-  'Cache-Control': 'no-store, no-cache, must-revalidate'
+  'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
+  'Surrogate-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Cloudflare-CDN-Cache-Control': 'no-store'
 };
 
 function getKV(context) {
@@ -52,14 +54,13 @@ export async function onRequestGet(context) {
       return new Response(JSON.stringify([]), { status: 200, headers: JSON_HEADERS });
     }
 
-    let raw = await kv.get('sobber_patients');
+    let raw = await kv.get('sobber_patients', { type: 'text', cacheTtl: 0 });
     let patients = [];
 
     if (raw) {
       try { patients = JSON.parse(raw); } catch {}
     } else {
-      // Fallback check from sobber_state
-      const stateRaw = await kv.get('sobber_state');
+      const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
       if (stateRaw) {
         try {
           const parsed = JSON.parse(stateRaw);
@@ -108,7 +109,7 @@ export async function onRequestPost(context) {
     }
 
     let currentList = [];
-    const raw = await kv.get('sobber_patients');
+    const raw = await kv.get('sobber_patients', { type: 'text', cacheTtl: 0 });
     if (raw) {
       try { currentList = JSON.parse(raw); } catch {}
     }
@@ -132,12 +133,14 @@ export async function onRequestPost(context) {
       await kv.put('sobber_patients', JSON.stringify(currentList));
 
       // Also update sobber_state
-      const stateRaw = await kv.get('sobber_state');
+      const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+      let stateObj = null;
       if (stateRaw) {
         try {
-          const stateObj = JSON.parse(stateRaw);
+          stateObj = JSON.parse(stateRaw);
           stateObj.patients = currentList;
           stateObj.lastSyncedAt = new Date().toISOString();
+          stateObj.stateVersion = Date.now();
           await kv.put('sobber_state', JSON.stringify(stateObj));
         } catch {}
       }
@@ -147,7 +150,8 @@ export async function onRequestPost(context) {
         message: `Batch imported ${payload.length} residents successfully`,
         count: currentList.length,
         addedIds,
-        patients: currentList
+        patients: currentList,
+        version: stateObj?.stateVersion || Date.now()
       }), {
         status: 200,
         headers: JSON_HEADERS
@@ -173,12 +177,14 @@ export async function onRequestPost(context) {
     await kv.put('sobber_patients', JSON.stringify(currentList));
 
     // Update in sobber_state
-    const stateRaw = await kv.get('sobber_state');
+    const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+    let stateObj = null;
     if (stateRaw) {
       try {
-        const stateObj = JSON.parse(stateRaw);
+        stateObj = JSON.parse(stateRaw);
         stateObj.patients = currentList;
         stateObj.lastSyncedAt = new Date().toISOString();
+        stateObj.stateVersion = Date.now();
         await kv.put('sobber_state', JSON.stringify(stateObj));
       } catch {}
     }
@@ -187,7 +193,9 @@ export async function onRequestPost(context) {
       success: true,
       message: 'Resident record saved successfully to SOBBER_KV',
       patient: patientItem,
-      count: currentList.length
+      patients: currentList,
+      count: currentList.length,
+      version: stateObj?.stateVersion || Date.now()
     }), {
       status: 200,
       headers: JSON_HEADERS
@@ -222,7 +230,7 @@ export async function onRequestDelete(context) {
     }
 
     let list = [];
-    const raw = await kv.get('sobber_patients');
+    const raw = await kv.get('sobber_patients', { type: 'text', cacheTtl: 0 });
     if (raw) {
       try { list = JSON.parse(raw); } catch {}
     }
@@ -234,17 +242,17 @@ export async function onRequestDelete(context) {
     await kv.put('sobber_patients', JSON.stringify(list));
 
     // Update sobber_state
-    const stateRaw = await kv.get('sobber_state');
+    const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
     if (stateRaw) {
       try {
         const stateObj = JSON.parse(stateRaw);
         stateObj.patients = list;
-        // Also remove patient's MAR logs
         if (Array.isArray(stateObj.medicationLogs)) {
           stateObj.medicationLogs = stateObj.medicationLogs.filter(m => m.patientId !== patientId);
           await kv.put('sobber_medications', JSON.stringify(stateObj.medicationLogs));
         }
         stateObj.lastSyncedAt = new Date().toISOString();
+        stateObj.stateVersion = Date.now();
         await kv.put('sobber_state', JSON.stringify(stateObj));
       } catch {}
     }
@@ -253,6 +261,7 @@ export async function onRequestDelete(context) {
       success: true,
       deletedId: patientId,
       remainingCount: list.length,
+      patients: list,
       wasRemoved: beforeLen !== list.length
     }), {
       status: 200,
