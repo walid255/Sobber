@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SerenityCare - Sober House &amp; Clinical Recovery Management</title>
+  
+  <!-- Dynamic Favicon -->
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            teal: {
+              50: '#f0fdfa',
+              100: '#ccfbf1',
+              200: '#99f6e4',
+              300: '#5eead4',
+              400: '#2dd4bf',
+              500: '#14b8a6',
+              600: '#0d9488',
+              700: '#0f766e',
+              800: '#115e59',
+              900: '#134e4a',
+              950: '#042f2e'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Chart.js for Medical Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Canvas Confetti for Celebratory Graduation Releases -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <!-- Custom Medical Stylesheet & Print Styles -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-slate-100 min-h-screen antialiased selection:bg-teal-500 selection:text-white">
+
+  <!-- ========================================================================= -->
+  <!-- DEDICATED PRODUCTION LOGIN PANEL SCREEN                                    -->
+  <!-- ========================================================================= -->
+  <div id="login-screen" class="fixed inset-0 z-50 min-h-screen w-full flex items-center justify-center p-4 bg-gradient-to-br from-slate-950 via-slate-900 to-teal-950 overflow-y-auto">
+    <!-- Background subtle medical grid & decorative glow circles -->
+    <div class="absolute inset-0 bg-[radial-gradient(#0d9488_1px,transparent_1px)] [background-size:28px_28px] opacity-25 pointer-events-none"></div>
+    <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-teal-500/10 blur-3xl pointer-events-none"></div>
+    <div class="absolute -bottom-24 -right-24 w-96 h-96 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none"></div>
+
+    <div class="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200/80 p-7 md:p-9 z-10 animate-modal-pop">
+      
+      <!-- Top Decorative Medical Ribbon -->
+      <div class="absolute top-0 left-0 right-0 h-1.5 rounded-t-3xl bg-gradient-to-r from-teal-500 via-emerald-500 to-cyan-500"></div>
+
+      <!-- Brand Logo & Header -->
+      <div class="text-center mb-6">
+        <img src="assets/logo.svg" alt="SerenityCare Logo" class="h-12 mx-auto object-contain mb-3">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-bold uppercase tracking-wider mb-2">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-teal-600"></i>
+          <span>HIPAA &amp; 42 CFR Part 2 Secured Portal</span>
+        </div>
+        <h2 class="text-xl font-extrabold text-slate-900 tracking-tight">Clinical Staff Authentication</h2>
+        <p class="text-xs text-slate-500 mt-1">Sign in with authorized credentials to access clinical records</p>
+      </div>
+
+      <!-- Error Alert Box (Hidden by default) -->
+      <div id="login-error-box" class="hidden mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start gap-2.5">
+        <i data-lucide="alert-circle" class="w-4 h-4 text-rose-600 shrink-0 mt-0.5"></i>
+        <div id="login-error-text">Invalid login credentials.</div>
+      </div>
+
+      <!-- Login Form -->
+      <form id="login-form" class="space-y-4 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1.5">Staff Email Address</label>
+          <div class="relative">
+            <i data-lucide="mail" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            <input type="email" id="login-email" required placeholder="admin@serenitycare.org"
+                   class="w-full pl-10 pr-3.5 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-xs text-slate-900 font-medium">
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="font-bold text-slate-700">Account Password</label>
+            <span class="text-[11px] text-slate-400">Case-sensitive</span>
+          </div>
+          <div class="relative">
+            <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            <input type="password" id="login-password" required placeholder="••••••••••••"
+                   class="w-full pl-10 pr-10 py-3 rounded-xl border border-slate-200 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 text-xs text-slate-900 font-mono">
+            <button type="button" id="toggle-pwd-btn" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
+              <i data-lucide="eye" id="toggle-pwd-icon" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="remember-me" class="rounded text-teal-600 focus:ring-teal-500">
+            <span class="text-slate-600 font-medium text-[11px]">Remember workstation session</span>
+          </label>
+        </div>
+
+        <button type="submit" id="submit-login-btn" class="w-full py-3 rounded-xl btn-decor-primary font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-teal-700/20">
+          <span>Sign In to Clinical Suite</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+
+      <!-- First-Run Production Credentials Helper Card -->
+      <div class="mt-6 pt-4 border-t border-slate-100 bg-slate-50/80 -mx-3 -mb-3 p-4 rounded-b-2xl">
+        <div class="flex items-center justify-between text-[11px] text-slate-500 mb-2">
+          <span class="font-bold text-slate-700 flex items-center gap-1">
+            <i data-lucide="key" class="w-3.5 h-3.5 text-teal-600"></i>
+            <span>Default Administrator Account</span>
+          </span>
+          <button type="button" id="autofill-admin-btn" class="text-teal-700 hover:underline font-bold text-[10px]">
+            Autofill &rarr;
+          </button>
+        </div>
+        <div class="font-mono text-[10px] bg-white p-2 rounded-lg border border-slate-200 text-slate-700 space-y-0.5">
+          <div>Email: <strong class="text-teal-800">admin@serenitycare.org</strong></div>
+          <div>Pass: <strong class="text-slate-900">Admin@Serenity2026!</strong></div>
+        </div>
+      </div>
+
+      <!-- Legal Footer -->
+      <div class="text-center text-[10px] text-slate-400 mt-4">
+        Protected Health Information (PHI). Authorized clinical personnel only.
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ========================================================================= -->
+  <!-- MAIN APPLICATION SHELL (Displayed when authenticated)                    -->
+  <!-- ========================================================================= -->
+  <div id="app-shell" class="min-h-screen flex w-full hidden">
+
+    <!-- Left Sidebar Navigation -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white flex flex-col justify-between transition-transform duration-300 md:translate-x-0 -translate-x-full shadow-2xl border-r border-slate-800">
+      
+      <div>
+        <!-- Facility Logo & Brand -->
+        <div class="p-5 border-b border-slate-800/80 flex items-center gap-3">
+          <img id="top-bar-logo" src="assets/logo.svg" alt="SerenityCare Logo" class="h-10 w-auto object-contain">
+        </div>
+
+        <!-- Navigation Menu -->
+        <nav class="p-3 space-y-1 text-xs font-semibold" id="sidebar-nav">
+          <div class="nav-section-title px-3 py-2 text-[10px] uppercase tracking-wider text-slate-400 font-bold" data-i18n="nav_clinical_ops" data-section="clinical_ops">Clinical Operations</div>
+          
+          <a href="#dashboard" data-route="dashboard" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
+            <i data-lucide="layout-dashboard" class="w-4 h-4 text-teal-400"></i>
+            <span data-i18n="nav_dashboard">Dashboard &amp; Metrics</span>
+          </a>
+
+          <a href="#patients" data-route="patients" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
+            <i data-lucide="users" class="w-4 h-4 text-teal-400"></i>
+            <span data-i18n="nav_patients">Resident Registry</span>
+          </a>
+
+          <a href="#medications" data-route="medications" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
+            <i data-lucide="pill" class="w-4 h-4 text-teal-400"></i>
+            <span data-i18n="nav_medications">Medications (MAR)</span>
+          </a>
+
+          <a href="#timetable" data-route="timetable" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
+            <i data-lucide="calendar" class="w-4 h-4 text-teal-400"></i>
+            <span data-i18n="nav_timetable">House Timetable</span>
+          </a>
+
+          <div class="nav-section-title px-3 pt-4 pb-2 text-[10px] uppercase tracking-wider text-slate-400 font-bold" data-i18n="nav_logistics" data-section="logistics">Facility &amp; Logistics</div>
+
+          <a href="#inventory" data-route="inventory" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
+            <i data-lucide="boxes" class="w-4 h-4 text-teal-400"></i>
+            <span data-i18n="nav_inventory">Pharmacy &amp; Store</span>
+          </a>
+
+          <a href="#certificates" data-route="certificates" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
+            <i data-lucide="award" class="w-4 h-4 text-amber-400"></i>
+            <span data-i18n="nav_certificates">Graduation &amp; Release</span>
+          </a>
+
+          <a href="#batch-upload" data-route="batch-upload" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
+            <i data-lucide="upload-cloud" class="w-4 h-4 text-teal-400"></i>
+            <span data-i18n="nav_batch_upload">Batch CSV Import</span>
+          </a>
+
+          <div class="nav-section-title px-3 pt-4 pb-2 text-[10px] uppercase tracking-wider text-slate-400 font-bold" data-i18n="nav_admin" data-section="admin">Administration</div>
+
+          <a href="#users" data-route="users" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
+            <i data-lucide="user-check" class="w-4 h-4 text-teal-400"></i>
+            <span data-i18n="nav_users">Staff &amp; RBAC</span>
+          </a>
+
+          <a href="#settings" data-route="settings" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
+            <i data-lucide="settings" class="w-4 h-4 text-teal-400"></i>
+            <span data-i18n="nav_settings">Facility &amp; Cloudflare</span>
+          </a>
+        </nav>
+      </div>
+
+      <!-- Facility Status Footer & Quick Logout -->
+      <div class="p-4 border-t border-slate-800 text-[11px] text-slate-400 space-y-2.5">
+        <div class="flex items-center justify-between text-[10px] font-mono">
+          <span>FACILITY ID:</span>
+          <span class="text-teal-400 font-bold">SH-84920-MED</span>
+        </div>
+        <div class="flex items-center gap-2 text-emerald-400 font-semibold text-[10px]">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Production Store Connected</span>
+        </div>
+        <button id="sidebar-logout-btn" class="w-full mt-2 py-2 px-3 rounded-xl bg-slate-800 hover:bg-rose-900/40 hover:text-rose-300 text-slate-400 transition text-xs font-semibold flex items-center justify-center gap-2">
+          <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+          <span data-i18n="nav_sign_out">Sign Out Workstation</span>
+        </button>
+      </div>
+
+    </aside>
+
+    <!-- Main Viewport Container -->
+    <div id="app-shell-main" class="flex-1 md:pl-64 flex flex-col min-h-screen transition-all duration-300">
+      
+      <!-- Top Header Navigation Bar -->
+      <header id="top-nav" class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 md:px-8 py-3 flex items-center justify-between shadow-xs">
+        
+        <!-- Mobile & Desktop Sidebar Toggles & Brand Title -->
+        <div class="flex items-center gap-3">
+          <!-- Mobile Menu Button -->
+          <button id="mobile-menu-btn" class="md:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100" title="Toggle Mobile Navigation">
+            <i data-lucide="menu" class="w-5 h-5"></i>
+          </button>
+
+          <!-- Desktop Sidebar Collapse Toggle Button -->
+          <button id="sidebar-toggle-btn" class="hidden md:flex p-2 rounded-xl text-slate-600 hover:bg-slate-100 hover:text-teal-700 transition" title="Toggle Navigation Sidebar">
+            <i data-lucide="panel-left-close" id="sidebar-toggle-icon" class="w-5 h-5"></i>
+          </button>
+
+          <div class="hidden sm:block">
+            <h1 class="text-sm font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+              <span data-i18n="facility_title">SerenityCare Recovery Facility</span>
+              <span class="text-slate-300">&bull;</span>
+              <span class="text-xs font-semibold text-teal-700" data-i18n="clinical_suite">Clinical Management Suite</span>
+            </h1>
+          </div>
+        </div>
+
+        <!-- Right Header Actions -->
+        <div class="flex items-center gap-3">
+          
+          <!-- Individual User Language Switcher -->
+          <div class="relative" id="lang-picker-container">
+            <button type="button" id="lang-menu-btn" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white text-xs font-semibold text-slate-700 transition shadow-xs" title="Switch Language (Individual Preference)">
+              <span id="header-lang-flag">🇺🇸</span>
+              <span id="header-lang-label" class="hidden sm:inline">English</span>
+              <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+            </button>
+            <div id="lang-dropdown-menu" class="hidden absolute right-0 mt-1.5 w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-50 text-xs font-medium">
+              <button type="button" id="lang-opt-en" class="w-full text-left px-3 py-2 hover:bg-teal-50 flex items-center gap-2 text-slate-700">
+                <span>🇺🇸</span> <span>English</span>
+              </button>
+              <button type="button" id="lang-opt-sw" class="w-full text-left px-3 py-2 hover:bg-teal-50 flex items-center gap-2 text-slate-700">
+                <span>🇹🇿</span> <span>Kiswahili</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Live Medication Reminder Notification Bell -->
+          <div class="relative" id="header-reminder-bell-container">
+            <button id="reminder-bell-btn" class="relative p-2.5 rounded-xl bg-slate-100 hover:bg-teal-50 hover:text-teal-700 text-slate-600 transition-colors" title="Upcoming Reminders">
+              <i data-lucide="bell" class="w-4 h-4"></i>
+              <!-- Pulse Glow Ring -->
+              <span id="reminder-bell-pulse" class="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-amber-500 animate-ping hidden"></span>
+              <!-- Count Badge -->
+              <span id="reminder-bell-count" class="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[9px] font-black bg-rose-500 text-white shadow-sm hidden">
+                0
+              </span>
+            </button>
+          </div>
+
+          <!-- Quick Dose Administration Trigger -->
+          <button id="header-dose-check-btn" onclick="window.AppReminders.triggerMedicationAlert()" 
+                  class="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold btn-decor-primary" 
+                  title="Immediate medication check">
+            <i data-lucide="pill" class="w-3.5 h-3.5"></i>
+            <span data-i18n="check_next_dose">Check Next Dose</span>
+          </button>
+
+          <!-- Vertical Separator -->
+          <div class="h-6 w-px bg-slate-200"></div>
+
+          <!-- Authenticated Staff Profile Widget -->
+          <div id="header-user-profile-btn" class="flex items-center gap-2.5 cursor-pointer p-1.5 rounded-xl hover:bg-slate-50 transition border border-transparent hover:border-slate-200" title="Switch User / View Profile">
+            <div id="header-user-avatar" class="w-8 h-8 rounded-full bg-gradient-to-tr from-teal-700 to-teal-500 text-white text-xs font-bold flex items-center justify-center shadow-sm">
+              AD
+            </div>
+            <div class="hidden sm:block text-left">
+              <div id="header-user-name" class="text-xs font-bold text-slate-800 leading-tight">System Administrator</div>
+              <span id="header-user-role" class="text-[9px] font-bold px-1.5 py-0.2 rounded-full badge-medical-rose">ADMIN</span>
+            </div>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+          </div>
+
+          <!-- Direct Sign Out Button in Header -->
+          <button id="header-logout-btn" class="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Sign Out">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+
+        </div>
+
+      </header>
+
+      <!-- Main Content Dynamic Mount Point -->
+      <main class="flex-1 p-4 md:p-8 max-w-7xl w-full mx-auto">
+        <div id="view-container">
+          <!-- SPA View injected here -->
+        </div>
+      </main>
+
+    </div>
+
+  </div>
+
+  <!-- SPA Javascript Modules Loaded in Strict Order -->
+  <script src="js/i18n.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/components/modal.js"></script>
+  <script src="js/components/reminders.js"></script>
+  <script src="js/components/pdf-generator.js"></script>
+  <script src="js/views/dashboard.js"></script>
+  <script src="js/views/patients.js"></script>
+  <script src="js/views/medications.js"></script>
+  <script src="js/views/inventory.js"></script>
+  <script src="js/views/timetable.js"></script>
+  <script src="js/views/certificates.js"></script>
+  <script src="js/views/batch-upload.js"></script>
+  <script src="js/views/users.js"></script>
+  <script src="js/views/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
