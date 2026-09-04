@@ -1,10 +1,10 @@
 /**
- * SerenityCare Cloudflare Worker / Pages Functions API Router
+ * SerenityCare Cloudflare Worker / Pages API Router
  * 
  * Provides serverless edge execution with:
- * - Cloudflare D1 SQL Relational Database (`env.DB`)
- * - Cloudflare KV Namespace for Fast Sessions & Caching (`env.KV`)
- * - Cloudflare R2 Object Storage for Resident Photos & PDF Dossiers (`env.BUCKET`)
+ * - Cloudflare Workers KV (`env.SOBBER_KV` or `env.KV`)
+ * - Cloudflare D1 SQL Relational Database (`env.DB`) [optional]
+ * - Cloudflare R2 Object Storage for Resident Photos & PDF Dossiers (`env.BUCKET`) [optional]
  */
 
 export default {
@@ -18,120 +18,276 @@ export default {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-store, no-cache, must-revalidate'
     };
 
     if (method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
 
+    const kv = env.SOBBER_KV || env.KV;
+
     try {
-      // 1. Health & Sync Ping
-      if (path === '/api/health' || path === '/api/sync') {
+      // 1. Health Ping
+      if (path === '/api/health') {
         return new Response(JSON.stringify({
           status: 'online',
+          system: 'SerenityCare Recovery Management System',
           edgeLocation: request.cf?.colo || 'LocalEdge',
+          kvConnected: Boolean(kv),
           d1Connected: Boolean(env.DB),
-          kvConnected: Boolean(env.KV),
           r2Connected: Boolean(env.BUCKET),
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          endpoints: [
+            '/api/sync',
+            '/api/users',
+            '/api/patients',
+            '/api/medications',
+            '/api/inventory',
+            '/api/timetable',
+            '/api/health'
+          ]
         }), { headers: corsHeaders });
       }
 
-      // 1.1 POST /api/login (Authentication)
-      if (path === '/api/login' && method === 'POST') {
-        const { email, password } = await request.json();
-        if (!env.DB) {
-          return new Response(JSON.stringify({ error: 'D1 binding missing' }), { status: 500, headers: corsHeaders });
+      // 2. /api/sync (Global SerenityCare Sober House State Replication)
+      if (path === '/api/sync') {
+        if (method === 'GET') {
+          if (!kv) {
+            return new Response(JSON.stringify({ online: false, message: 'KV namespace not bound' }), { headers: corsHeaders });
+          }
+          let stateData = await kv.get('sobber_state');
+          if (!stateData) {
+            stateData = await kv.get('serenitycare_state');
+          }
+          return new Response(stateData || '{}', { headers: corsHeaders });
         }
-        const user = await env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(email.toLowerCase().trim()).first();
-        if (!user) {
-          return new Response(JSON.stringify({ error: 'Invalid credentials' }), { status: 401, headers: corsHeaders });
+        if (method === 'POST') {
+          if (!kv) {
+            return new Response(JSON.stringify({ success: false, error: 'KV binding missing (bind SOBBER_KV or KV)' }), { status: 500, headers: corsHeaders });
+          }
+          const stateObj = await request.json();
+          stateObj.lastSyncedAt = new Date().toISOString();
+          await kv.put('sobber_state', JSON.stringify(stateObj));
+
+          // Mirror collections
+          if (Array.isArray(stateObj.users)) await kv.put('sobber_users', JSON.stringify(stateObj.users));
+          if (Array.isArray(stateObj.patients)) await kv.put('sobber_patients', JSON.stringify(stateObj.patients));
+          if (Array.isArray(stateObj.medicationLogs)) await kv.put('sobber_medications', JSON.stringify(stateObj.medicationLogs));
+          if (Array.isArray(stateObj.inventory)) await kv.put('sobber_inventory', JSON.stringify(stateObj.inventory));
+          if (Array.isArray(stateObj.timetable)) await kv.put('sobber_timetable', JSON.stringify(stateObj.timetable));
+
+          return new Response(JSON.stringify({ success: true, timestamp: stateObj.lastSyncedAt }), { headers: corsHeaders });
         }
-        const token = crypto.randomUUID();
-        if (env.KV) {
-          await env.KV.put(`session:${token}`, JSON.stringify(user), { expirationTtl: 86400 });
-        }
-        return new Response(JSON.stringify({ success: true, token, user }), { headers: corsHeaders });
       }
 
-      // 2. GET /api/patients
-      if (path === '/api/patients' && method === 'GET') {
-        if (!env.DB) {
-          return new Response(JSON.stringify({ error: 'D1 binding missing' }), { status: 500, headers: corsHeaders });
+      // 3. /api/users (Staff & RBAC global sync)
+      if (path === '/api/users') {
+        if (method === 'GET') {
+          if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
+          let usersData = await kv.get('sobber_users');
+          if (!usersData) usersData = await kv.get('serenitycare_users');
+          return new Response(usersData || '[]', { headers: corsHeaders });
         }
-        const { results } = await env.DB.prepare('SELECT * FROM patients ORDER BY created_at DESC').all();
-        return new Response(JSON.stringify(results), { headers: corsHeaders });
-      }
+        if (method === 'POST') {
+          if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
+          const userPayload = await request.json();
+          let currentUsers = [];
+          const existing = await kv.get('sobber_users');
+          if (existing) {
+            try { currentUsers = JSON.parse(existing); } catch {}
+          }
+          if (Array.isArray(userPayload)) {
+            currentUsers = userPayload;
+          } else {
+            const idx = currentUsers.findIndex(u => u.id === userPayload.id || u.email === userPayload.email);
+            if (idx >= 0) currentUsers[idx] = { ...currentUsers[idx], ...userPayload };
+            else currentUsers.push(userPayload);
+          }
+          await kv.put('sobber_users', JSON.stringify(currentUsers));
 
-      // 3. POST /api/patients (Intake new resident)
-      if (path === '/api/patients' && method === 'POST') {
-        const body = await request.json();
-        const id = 'PAT-' + Date.now().toString(36).toUpperCase();
+          // Sync with sobber_state
+          const rawState = await kv.get('sobber_state');
+          if (rawState) {
+            try {
+              const stateObj = JSON.parse(rawState);
+              stateObj.users = currentUsers;
+              stateObj.lastSyncedAt = new Date().toISOString();
+              await kv.put('sobber_state', JSON.stringify(stateObj));
+            } catch {}
+          }
 
-        await env.DB.prepare(`
-          INSERT INTO patients (id, name, dob, age, gender, blood_group, phone, email, photo_url, room_number, bed_number, stage, sobriety_days)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(
-          id, body.name, body.dob, body.age, body.gender, body.bloodGroup, body.phone, body.email,
-          body.photo, body.roomNumber, body.bedNumber, body.stage || 'Inpatient Recovery', body.sobrietyDays || 1
-        ).run();
-
-        // Also insert next of kin if provided
-        if (body.nextOfKin) {
-          await env.DB.prepare(`
-            INSERT INTO next_of_kin (patient_id, name, relationship, phone, address)
-            VALUES (?, ?, ?, ?, ?)
-          `).bind(id, body.nextOfKin.name, body.nextOfKin.relationship, body.nextOfKin.phone, body.nextOfKin.address).run();
+          return new Response(JSON.stringify({ success: true, count: currentUsers.length, users: currentUsers }), { headers: corsHeaders });
         }
+        if (method === 'DELETE') {
+          if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
+          const id = url.searchParams.get('id');
+          if (!id) return new Response(JSON.stringify({ error: 'Missing id' }), { status: 400, headers: corsHeaders });
+          let currentUsers = [];
+          const existing = await kv.get('sobber_users');
+          if (existing) {
+            try { currentUsers = JSON.parse(existing); } catch {}
+          }
+          currentUsers = currentUsers.filter(u => u.id !== id);
+          await kv.put('sobber_users', JSON.stringify(currentUsers));
 
-        // Cache update in KV
-        if (env.KV) {
-          await env.KV.put(`patient:${id}`, JSON.stringify(body));
+          // Sync with sobber_state
+          const rawState = await kv.get('sobber_state');
+          if (rawState) {
+            try {
+              const stateObj = JSON.parse(rawState);
+              stateObj.users = currentUsers;
+              stateObj.lastSyncedAt = new Date().toISOString();
+              await kv.put('sobber_state', JSON.stringify(stateObj));
+            } catch {}
+          }
+
+          return new Response(JSON.stringify({ success: true, deletedId: id }), { headers: corsHeaders });
         }
-
-        return new Response(JSON.stringify({ success: true, id }), { headers: corsHeaders });
       }
 
-      // 4. POST /api/patients/batch (Batch CSV Import)
-      if (path === '/api/patients/batch' && method === 'POST') {
-        const batch = await request.json();
-        const inserted = [];
-
-        for (const item of batch) {
-          const id = 'PAT-' + (100 + Math.floor(Math.random() * 9000));
-          await env.DB.prepare(`
-            INSERT INTO patients (id, name, dob, age, gender, blood_group, phone, email, photo_url, room_number, bed_number, stage, sobriety_days)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(
-            id, item.name, item.dob, item.age || 30, item.gender || 'Male', item.bloodGroup || 'O+',
-            item.phone || '', item.email || '', item.photo || '', item.roomNumber || 'Room 101',
-            item.bedNumber || 'Bed A', item.stage || 'Inpatient Recovery', item.sobrietyDays || 1
-          ).run();
-          inserted.push(id);
+      // 4. /api/patients (Resident Registry)
+      if (path === '/api/patients') {
+        if (method === 'GET') {
+          if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
+          const data = await kv.get('sobber_patients');
+          return new Response(data || '[]', { headers: corsHeaders });
         }
+        if (method === 'POST') {
+          if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
+          const payload = await request.json();
+          let patients = [];
+          const existing = await kv.get('sobber_patients');
+          if (existing) {
+            try { patients = JSON.parse(existing); } catch {}
+          }
+          if (Array.isArray(payload)) {
+            patients = payload;
+          } else {
+            const idx = patients.findIndex(p => p.id === payload.id);
+            if (idx >= 0) patients[idx] = { ...patients[idx], ...payload };
+            else patients.unshift(payload);
+          }
+          await kv.put('sobber_patients', JSON.stringify(patients));
 
-        return new Response(JSON.stringify({ success: true, count: inserted.length, ids: inserted }), { headers: corsHeaders });
+          const rawState = await kv.get('sobber_state');
+          if (rawState) {
+            try {
+              const stateObj = JSON.parse(rawState);
+              stateObj.patients = patients;
+              stateObj.lastSyncedAt = new Date().toISOString();
+              await kv.put('sobber_state', JSON.stringify(stateObj));
+            } catch {}
+          }
+
+          return new Response(JSON.stringify({ success: true, count: patients.length, patients }), { headers: corsHeaders });
+        }
       }
 
-      // 5. GET /api/mar & POST /api/mar/administer
-      if (path === '/api/mar' && method === 'GET') {
-        const { results } = await env.DB.prepare('SELECT * FROM medication_logs ORDER BY scheduled_time ASC').all();
-        return new Response(JSON.stringify(results), { headers: corsHeaders });
+      // 5. /api/medications (MAR logs)
+      if (path === '/api/medications') {
+        if (method === 'GET') {
+          if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
+          const data = await kv.get('sobber_medications');
+          return new Response(data || '[]', { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
+          const payload = await request.json();
+          let logs = [];
+          const existing = await kv.get('sobber_medications');
+          if (existing) {
+            try { logs = JSON.parse(existing); } catch {}
+          }
+          if (Array.isArray(payload)) {
+            logs = payload;
+          } else {
+            const idx = logs.findIndex(l => l.id === payload.id);
+            if (idx >= 0) logs[idx] = { ...logs[idx], ...payload };
+            else logs.unshift(payload);
+          }
+          await kv.put('sobber_medications', JSON.stringify(logs));
+
+          const rawState = await kv.get('sobber_state');
+          if (rawState) {
+            try {
+              const stateObj = JSON.parse(rawState);
+              stateObj.medicationLogs = logs;
+              stateObj.lastSyncedAt = new Date().toISOString();
+              await kv.put('sobber_state', JSON.stringify(stateObj));
+            } catch {}
+          }
+
+          return new Response(JSON.stringify({ success: true, count: logs.length, data: logs }), { headers: corsHeaders });
+        }
       }
 
-      if (path === '/api/mar/administer' && method === 'POST') {
-        const { logId, status, nurseName, notes } = await request.json();
-        await env.DB.prepare(`
-          UPDATE medication_logs 
-          SET status = ?, administered_at = CURRENT_TIMESTAMP, nurse_name = ?, notes = ?
-          WHERE id = ?
-        `).bind(status, nurseName, notes, logId).run();
+      // 6. /api/inventory
+      if (path === '/api/inventory') {
+        if (method === 'GET') {
+          if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
+          const data = await kv.get('sobber_inventory');
+          return new Response(data || '[]', { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
+          const payload = await request.json();
+          let items = [];
+          const existing = await kv.get('sobber_inventory');
+          if (existing) {
+            try { items = JSON.parse(existing); } catch {}
+          }
+          if (Array.isArray(payload)) {
+            items = payload;
+          } else {
+            const idx = items.findIndex(i => i.id === payload.id);
+            if (idx >= 0) items[idx] = { ...items[idx], ...payload };
+            else items.unshift(payload);
+          }
+          await kv.put('sobber_inventory', JSON.stringify(items));
 
-        return new Response(JSON.stringify({ success: true, logId, status }), { headers: corsHeaders });
+          const rawState = await kv.get('sobber_state');
+          if (rawState) {
+            try {
+              const stateObj = JSON.parse(rawState);
+              stateObj.inventory = items;
+              stateObj.lastSyncedAt = new Date().toISOString();
+              await kv.put('sobber_state', JSON.stringify(stateObj));
+            } catch {}
+          }
+
+          return new Response(JSON.stringify({ success: true, count: items.length, data: items }), { headers: corsHeaders });
+        }
       }
 
-      // 6. R2 Storage Upload (POST /api/upload)
+      // 7. /api/timetable
+      if (path === '/api/timetable') {
+        if (method === 'GET') {
+          if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
+          const data = await kv.get('sobber_timetable');
+          return new Response(data || '[]', { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
+          const payload = await request.json();
+          await kv.put('sobber_timetable', JSON.stringify(payload));
+
+          const rawState = await kv.get('sobber_state');
+          if (rawState) {
+            try {
+              const stateObj = JSON.parse(rawState);
+              stateObj.timetable = Array.isArray(payload) ? payload : [];
+              stateObj.lastSyncedAt = new Date().toISOString();
+              await kv.put('sobber_state', JSON.stringify(stateObj));
+            } catch {}
+          }
+
+          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
+        }
+      }
+
+      // 8. R2 Storage Upload (POST /api/upload)
       if (path === '/api/upload' && method === 'POST') {
         if (!env.BUCKET) {
           return new Response(JSON.stringify({ error: 'R2 bucket not bound' }), { status: 500, headers: corsHeaders });
@@ -146,13 +302,7 @@ export default {
         return new Response(JSON.stringify({ success: true, key, url: fileUrl }), { headers: corsHeaders });
       }
 
-      // 7. GET /api/inventory
-      if (path === '/api/inventory' && method === 'GET') {
-        const { results } = await env.DB.prepare('SELECT * FROM inventory_items ORDER BY category ASC').all();
-        return new Response(JSON.stringify(results), { headers: corsHeaders });
-      }
-
-      // 8. Default 404 for unknown API routes
+      // 9. Default 404 for unknown API routes
       return new Response(JSON.stringify({ error: 'API endpoint not found', path }), { status: 404, headers: corsHeaders });
 
     } catch (err) {

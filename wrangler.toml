@@ -1,24 +1,31 @@
-# Cloudflare Wrangler Configuration for SerenityCare
+# Cloudflare Wrangler Configuration for SerenityCare Sober House Management
 name = "serenitycare-sober-house"
 main = "cloudflare/worker.js"
 compatibility_date = "2024-09-01"
+pages_build_output_dir = "./"
 
-# Cloudflare D1 SQL Relational Database Binding
+# Primary Cloudflare KV Namespace for Global Sober House State Replication
+# (Stores residents, staff/RBAC, MAR logs, inventory, timetable, and facility configuration)
+[[kv_namespaces]]
+binding = "SOBBER_KV"
+id = "your-sobber-kv-namespace-id-here"
+
+# Secondary / Standard Cloudflare KV Binding for Fast Sessions & Caching
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id-here"
+
+# Optional Cloudflare D1 SQL Relational Database Binding
 [[d1_databases]]
 binding = "DB"
 database_name = "serenitycare-db"
 database_id = "your-d1-database-id-here"
 
-# Cloudflare KV Namespace for Fast Sessions & Caching
-[[kv_namespaces]]
-binding = "KV"
-id = "your-kv-namespace-id-here"
-
-# Cloudflare R2 Storage Bucket for Resident Photos & Dossiers
+# Optional Cloudflare R2 Storage Bucket for Resident Photos & PDF Dossiers
 [[r2_buckets]]
 binding = "BUCKET"
 bucket_name = "serenitycare-storage"
 
-# Static Assets for SPA
+# Static Assets for Direct Worker Site Deployment
 [site]
 bucket = "./"

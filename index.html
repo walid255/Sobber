@@ -219,9 +219,9 @@
           <span>FACILITY ID:</span>
           <span class="text-teal-400 font-bold">SH-84920-MED</span>
         </div>
-        <div class="flex items-center gap-2 text-emerald-400 font-semibold text-[10px]">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Production Store Connected</span>
+        <div id="cloud-sync-status-container" class="flex items-center gap-2 text-emerald-400 font-semibold text-[10px]">
+          <span id="cloud-sync-pulse" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="cloud-sync-label">Cloudflare KV Synced</span>
         </div>
         <button id="sidebar-logout-btn" class="w-full mt-2 py-2 px-3 rounded-xl bg-slate-800 hover:bg-rose-900/40 hover:text-rose-300 text-slate-400 transition text-xs font-semibold flex items-center justify-center gap-2">
           <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
@@ -341,6 +341,7 @@
   <script src="js/components/modal.js"></script>
   <script src="js/components/reminders.js"></script>
   <script src="js/components/pdf-generator.js"></script>
+  <script src="js/admin.js"></script>
   <script src="js/views/dashboard.js"></script>
   <script src="js/views/patients.js"></script>
   <script src="js/views/medications.js"></script>

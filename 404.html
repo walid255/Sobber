@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 - Page Not Found | SerenityCare Recovery Facility</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex items-center justify-center p-4">
+  <div class="medical-card p-8 md:p-12 max-w-lg w-full text-center space-y-6 shadow-xl border border-slate-200">
+    <div class="w-20 h-20 rounded-3xl bg-teal-50 border border-teal-200 text-teal-700 flex items-center justify-center mx-auto shadow-sm">
+      <i data-lucide="shield-alert" class="w-10 h-10"></i>
+    </div>
+    
+    <div>
+      <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-100 text-rose-700">404 - Resource Not Found</span>
+      <h1 class="text-2xl md:text-3xl font-black text-slate-900 mt-3 tracking-tight">Clinical Page Not Found</h1>
+      <p class="text-xs md:text-sm text-slate-500 mt-2 max-w-sm mx-auto leading-relaxed">
+        The requested clinical portal resource or URL path does not exist or has been relocated.
+      </p>
+    </div>
+
+    <div class="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-3">
+      <a href="/" class="w-full sm:w-auto px-6 py-3 rounded-xl btn-decor-primary text-xs font-bold flex items-center justify-center gap-2">
+        <i data-lucide="home" class="w-4 h-4"></i>
+        <span>Return to Application</span>
+      </a>
+      <a href="/#dashboard" class="w-full sm:w-auto px-5 py-3 rounded-xl btn-decor-secondary text-xs font-bold flex items-center justify-center gap-2">
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+        <span>Dashboard</span>
+      </a>
+    </div>
+
+    <div class="text-[11px] text-slate-400 font-mono">
+      SerenityCare Cloudflare Pages Deployment &bull; Protected Health Information
+    </div>
+  </div>
+
+  <script>
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

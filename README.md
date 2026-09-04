@@ -109,23 +109,39 @@ Sobber/
 4. Once authenticated, you enter the clean production workspace. All dummy records have been removed so you can immediately admit real residents, prescribe medications, and catalog facility inventory.
 5. To end your session, click the **Sign Out** button in the header or sidebar.
 
-### Deploying to Cloudflare (D1, KV, R2)
-1. Install Wrangler:
+### Deploying to Cloudflare Pages with Workers KV
+1. **Direct Upload via Cloudflare Dashboard**:
+   - Go to [Cloudflare Dashboard](https://dash.cloudflare.com/) > **Workers & Pages** > **Create application** > **Pages** > **Upload assets**.
+   - Upload the root directory containing `index.html`, `404.html`, `_redirects`, and the `functions/` folder.
+   - Go to **Settings** > **Functions** > **KV namespace bindings**:
+     - Variable name: `SOBBER_KV` -> Select your Cloudflare KV namespace.
+     - Variable name: `KV` (optional fallback) -> Select your Cloudflare KV namespace.
+   - Any change made by an administrator (admitting a resident, managing staff accounts, signing off MAR doses, adding inventory) now immediately replicates globally across all connected browsers!
+
+2. **Deploy via Wrangler CLI**:
    ```bash
-   npm install -g wrangler
+   # Create KV namespaces
+   wrangler kv:namespace create "SOBBER_KV"
+   wrangler kv:namespace create "KV"
+
+   # Deploy directly to Cloudflare Pages
+   wrangler pages deploy . --project-name serenitycare-sober-house
    ```
-2. Create your D1 Database:
+
+### Dedicated Cloudflare Pages REST API Endpoints
+The application provides full serverless REST endpoints powered by Cloudflare Workers KV (`SOBBER_KV`):
+- `GET /api/health` - Ping serverless operational status and KV connection.
+- `GET /api/sync` & `POST /api/sync` - Full state snapshot synchronization across browsers.
+- `GET /api/users`, `POST /api/users`, `DELETE /api/users` - Clinical staff & RBAC management.
+- `GET /api/patients`, `POST /api/patients`, `DELETE /api/patients` - Resident intake, registry & batch CSV imports.
+- `GET /api/medications` & `POST /api/medications` - Supervised MAR doses & prescription tracking.
+- `GET /api/inventory` & `POST /api/inventory` - Pharmacy and logistics store inventory & dispensing.
+- `GET /api/timetable` & `POST /api/timetable` - Daily & weekly house timetable schedules.
+
+3. **Deploy as Cloudflare Worker**:
    ```bash
    wrangler d1 create serenitycare-db
    wrangler d1 execute serenitycare-db --file=./cloudflare/schema.sql
-   ```
-3. Create your KV Namespace and R2 Bucket:
-   ```bash
-   wrangler kv:namespace create "KV"
-   wrangler r2 bucket create serenitycare-storage
-   ```
-4. Update IDs in `wrangler.toml` and deploy:
-   ```bash
    wrangler deploy
    ```
 

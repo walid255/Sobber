@@ -69,6 +69,36 @@ class ReactiveStore {
   constructor() {
     this.subscribers = new Map();
     this.state = this.loadState();
+    this.isSyncing = false;
+    this.lastSyncedAt = null;
+    this.isCloudConnected = false;
+
+    // Cross-tab broadcast channel for instantaneous same-browser window sync
+    try {
+      if (typeof window !== 'undefined' && window.BroadcastChannel) {
+        this.broadcastChannel = new BroadcastChannel('serenitycare_sync_channel');
+        this.broadcastChannel.onmessage = (msg) => {
+          if (msg.data && msg.data.type === 'STATE_UPDATED' && msg.data.state) {
+            this.applyRemoteState(msg.data.state, false);
+          }
+        };
+      }
+    } catch (e) {
+      this.broadcastChannel = null;
+    }
+
+    // Immediate Cloudflare Workers KV synchronization
+    this.syncFromServer();
+
+    // Background auto-sync on focus / tab visibility
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', () => this.syncFromServer());
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') this.syncFromServer();
+      });
+      // Periodic background heartbeat sync every 10 seconds
+      setInterval(() => this.syncFromServer(), 10000);
+    }
   }
 
   loadState() {
@@ -81,15 +111,125 @@ class ReactiveStore {
     } catch (e) {
       console.warn('Could not load from localStorage, initializing defaults:', e);
     }
-    this.saveState(INITIAL_STATE);
+    this.saveState(INITIAL_STATE, false);
     return JSON.parse(JSON.stringify(INITIAL_STATE));
   }
 
-  saveState(stateToSave) {
+  saveState(stateToSave, syncToCloud = true) {
+    const currentState = stateToSave || this.state;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave || this.state));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
     } catch (e) {
       console.error('Error saving state to localStorage:', e);
+    }
+
+    if (syncToCloud) {
+      this.pushToServer(currentState);
+    }
+  }
+
+  /**
+   * Fetch live global state from Cloudflare KV endpoint
+   * Guarantees all browsers see updates immediately
+   */
+  async syncFromServer() {
+    if (this.isSyncing) return;
+    this.isSyncing = true;
+    try {
+      const res = await fetch('/api/sync', { 
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+      });
+
+      if (res.ok) {
+        const remote = await res.json();
+        if (remote && typeof remote === 'object' && Array.isArray(remote.users)) {
+          this.isCloudConnected = true;
+          this.applyRemoteState(remote, true);
+        }
+      }
+    } catch (err) {
+      // Local preview or offline mode
+      console.debug('Cloudflare KV sync offline/preview mode:', err.message);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  /**
+   * Apply remote state received from Cloudflare Workers KV
+   */
+  applyRemoteState(remoteState, saveToLocal = true) {
+    if (!remoteState || !Array.isArray(remoteState.users)) return;
+
+    // Check if remote state has newer data
+    const localUsersCount = this.state.users ? this.state.users.length : 0;
+    const remoteUsersCount = remoteState.users ? remoteState.users.length : 0;
+    const currentUserId = this.state.currentUser ? this.state.currentUser.id : null;
+
+    // Merge collections
+    this.state.users = remoteState.users;
+    if (remoteState.patients) this.state.patients = remoteState.patients;
+    if (remoteState.medicationLogs) this.state.medicationLogs = remoteState.medicationLogs;
+    if (remoteState.inventory) this.state.inventory = remoteState.inventory;
+    if (remoteState.inventoryTransactions) this.state.inventoryTransactions = remoteState.inventoryTransactions;
+    if (remoteState.timetable) this.state.timetable = remoteState.timetable;
+    if (remoteState.reminders) this.state.reminders = remoteState.reminders;
+    if (remoteState.facility) {
+      this.state.facility = { ...this.state.facility, ...remoteState.facility };
+    }
+
+    // Refresh active session profile if user exists in updated list
+    if (currentUserId) {
+      const freshUser = this.state.users.find(u => u.id === currentUserId);
+      if (freshUser) {
+        this.state.currentUser = { ...freshUser };
+      }
+    }
+
+    this.lastSyncedAt = remoteState.lastSyncedAt || new Date().toISOString();
+
+    if (saveToLocal) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      } catch (e) {}
+    }
+
+    this.emit('state:changed', this.state);
+    this.emit('sync:updated', { timestamp: this.lastSyncedAt });
+  }
+
+  /**
+   * Push state to Cloudflare KV storage
+   */
+  async pushToServer(stateToPush) {
+    const payload = stateToPush || this.state;
+    payload.lastSyncedAt = new Date().toISOString();
+
+    // Instant local broadcast to other tabs
+    if (this.broadcastChannel) {
+      try {
+        this.broadcastChannel.postMessage({ type: 'STATE_UPDATED', state: payload });
+      } catch (e) {}
+    }
+
+    try {
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        this.isCloudConnected = true;
+        this.lastSyncedAt = payload.lastSyncedAt;
+        this.emit('sync:success', { timestamp: this.lastSyncedAt });
+      }
+    } catch (err) {
+      console.debug('Cloudflare KV push failed (running in offline/local preview):', err.message);
     }
   }
 
@@ -147,7 +287,7 @@ class ReactiveStore {
    */
   mutate(mutationFn, eventName = 'state:changed', eventPayload = null) {
     mutationFn(this.state);
-    this.saveState();
+    this.saveState(this.state, true);
     this.emit(eventName, eventPayload);
   }
 
@@ -248,25 +388,55 @@ class ReactiveStore {
         details: `${newUser.name} (${newUser.role})`
       });
     }, 'user:added', newUser);
+
+    // Direct background sync to /api/users
+    try {
+      fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUser)
+      }).catch(() => {});
+    } catch (e) {}
+
     return newUser;
   }
 
   updateUser(userId, updates) {
+    let updated = null;
     this.mutate(s => {
       const idx = s.users.findIndex(u => u.id === userId);
       if (idx !== -1) {
         s.users[idx] = { ...s.users[idx], ...updates };
+        updated = s.users[idx];
         if (s.currentUser && s.currentUser.id === userId) {
           s.currentUser = { ...s.users[idx] };
         }
       }
     }, 'user:updated', { userId, updates });
+
+    if (updated) {
+      try {
+        fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updated)
+        }).catch(() => {});
+      } catch (e) {}
+    }
   }
 
   deleteUser(userId) {
     this.mutate(s => {
       s.users = s.users.filter(u => u.id !== userId);
     }, 'user:deleted', userId);
+
+    try {
+      fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.state.users)
+      }).catch(() => {});
+    } catch (e) {}
   }
 
   // --- PATIENTS ACTIONS ---

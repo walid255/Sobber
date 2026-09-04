@@ -31,6 +31,19 @@ class AppRouter {
       this.checkAuthAndRender();
     });
 
+    window.AppStore.subscribe('sync:updated', () => {
+      this.updateCloudSyncStatus();
+    });
+
+    window.AppStore.subscribe('sync:success', () => {
+      this.updateCloudSyncStatus();
+    });
+
+    // Trigger immediate Cloudflare Workers KV state sync (SOBBER_KV)
+    if (window.AppStore) {
+      window.AppStore.syncFromServer();
+    }
+
     // Handle hash navigation
     window.addEventListener('hashchange', () => {
       if (window.Auth.isAuthenticated()) {
@@ -449,6 +462,27 @@ class AppRouter {
     // Update language strings across navigation
     if (window.I18n) {
       window.I18n.translatePage(document.getElementById('app-shell'));
+    }
+
+    // Update Cloudflare KV real-time connection status
+    this.updateCloudSyncStatus();
+  }
+
+  updateCloudSyncStatus() {
+    const pulse = document.getElementById('cloud-sync-pulse');
+    const label = document.getElementById('cloud-sync-label');
+    if (!pulse || !label) return;
+
+    if (window.AppStore.isCloudConnected) {
+      pulse.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+      label.textContent = 'Cloudflare KV Synced';
+      label.title = `Globally connected. Last sync: ${window.AppStore.lastSyncedAt || 'Active'}`;
+    } else if (window.AppStore.isSyncing) {
+      pulse.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+      label.textContent = 'Syncing KV...';
+    } else {
+      pulse.className = 'w-2 h-2 rounded-full bg-teal-400';
+      label.textContent = 'Local Store Active';
     }
   }
 
