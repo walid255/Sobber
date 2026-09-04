@@ -90,15 +90,34 @@ class ReactiveStore {
     // Immediate Cloudflare Workers KV synchronization
     this.syncFromServer();
 
-    // Background auto-sync on focus / tab visibility
+    // Background auto-sync on focus / tab visibility / mobile touch
     if (typeof window !== 'undefined') {
       window.addEventListener('focus', () => this.syncFromServer());
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') this.syncFromServer();
       });
-      // Periodic background heartbeat sync every 10 seconds
-      setInterval(() => this.syncFromServer(), 10000);
+      // Throttled mobile touch wake-up sync
+      let lastTouchSync = 0;
+      window.addEventListener('touchstart', () => {
+        const now = Date.now();
+        if (now - lastTouchSync > 4000) {
+          lastTouchSync = now;
+          this.syncFromServer();
+        }
+      }, { passive: true });
+      // Rapid background heartbeat sync every 3 seconds for instant multi-device replication
+      setInterval(() => this.syncFromServer(), 3000);
     }
+  }
+
+  getApiUrl(endpoint) {
+    try {
+      const custom = localStorage.getItem('sobber_cloud_endpoint');
+      if (custom && custom.trim().startsWith('http')) {
+        return custom.trim().replace(/\/+$/, '') + endpoint;
+      }
+    } catch (e) {}
+    return endpoint;
   }
 
   loadState() {
@@ -130,27 +149,53 @@ class ReactiveStore {
 
   /**
    * Fetch live global state from Cloudflare KV endpoint
-   * Guarantees all browsers see updates immediately
+   * Guarantees all browsers and mobile devices see updates immediately
    */
   async syncFromServer() {
     if (this.isSyncing) return;
     this.isSyncing = true;
     try {
-      const res = await fetch('/api/sync', { 
+      const url = this.getApiUrl('/api/sync');
+      const res = await fetch(url, { 
         cache: 'no-store',
         headers: { 'Accept': 'application/json' }
       });
 
       if (res.ok) {
-        const remote = await res.json();
-        if (remote && typeof remote === 'object' && Array.isArray(remote.users)) {
-          this.isCloudConnected = true;
-          this.applyRemoteState(remote, true);
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          this.isCloudConnected = false;
+          this.cloudError = 'Server returned HTML instead of API JSON. Ensure Cloudflare Pages Functions are deployed.';
+          this.emit('sync:error', { error: this.cloudError });
+          return;
         }
+
+        const remote = await res.json();
+        if (remote && typeof remote === 'object') {
+          if (remote.online === false || remote.error) {
+            this.isCloudConnected = false;
+            this.cloudError = remote.message || remote.error || 'KV namespace binding missing';
+            this.emit('sync:error', { error: this.cloudError });
+          } else if (Array.isArray(remote.users)) {
+            this.isCloudConnected = true;
+            this.cloudError = null;
+            this.applyRemoteState(remote, true);
+          }
+        }
+      } else {
+        this.isCloudConnected = false;
+        try {
+          const errData = await res.json();
+          this.cloudError = errData.error || errData.message || `HTTP ${res.status}`;
+        } catch {
+          this.cloudError = `HTTP ${res.status} from ${url}`;
+        }
+        this.emit('sync:error', { error: this.cloudError });
       }
     } catch (err) {
-      // Local preview or offline mode
-      console.debug('Cloudflare KV sync offline/preview mode:', err.message);
+      this.isCloudConnected = false;
+      this.cloudError = err.message;
+      this.emit('sync:error', { error: err.message });
     } finally {
       this.isSyncing = false;
     }
@@ -163,8 +208,6 @@ class ReactiveStore {
     if (!remoteState || !Array.isArray(remoteState.users)) return;
 
     // Check if remote state has newer data
-    const localUsersCount = this.state.users ? this.state.users.length : 0;
-    const remoteUsersCount = remoteState.users ? remoteState.users.length : 0;
     const currentUserId = this.state.currentUser ? this.state.currentUser.id : null;
 
     // Merge collections
@@ -214,7 +257,8 @@ class ReactiveStore {
     }
 
     try {
-      const res = await fetch('/api/sync', {
+      const url = this.getApiUrl('/api/sync');
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -224,12 +268,63 @@ class ReactiveStore {
       });
 
       if (res.ok) {
-        this.isCloudConnected = true;
-        this.lastSyncedAt = payload.lastSyncedAt;
-        this.emit('sync:success', { timestamp: this.lastSyncedAt });
+        const json = await res.json().catch(() => ({}));
+        if (json.success !== false) {
+          this.isCloudConnected = true;
+          this.cloudError = null;
+          this.lastSyncedAt = payload.lastSyncedAt;
+          this.emit('sync:success', { timestamp: this.lastSyncedAt });
+        } else {
+          this.isCloudConnected = false;
+          this.cloudError = json.error || 'Cloudflare KV save failed';
+          this.emit('sync:error', { error: this.cloudError });
+        }
+      } else {
+        this.isCloudConnected = false;
+        try {
+          const errData = await res.json();
+          this.cloudError = errData.error || errData.message || `HTTP ${res.status}`;
+        } catch {
+          this.cloudError = `HTTP ${res.status} from cloud`;
+        }
+        this.emit('sync:error', { error: this.cloudError });
       }
     } catch (err) {
-      console.debug('Cloudflare KV push failed (running in offline/local preview):', err.message);
+      this.isCloudConnected = false;
+      this.cloudError = err.message;
+      this.emit('sync:error', { error: err.message });
+    }
+  }
+
+  async checkConnectivity() {
+    const startTime = performance.now();
+    try {
+      const url = this.getApiUrl('/api/health');
+      const res = await fetch(url, { cache: 'no-store' });
+      const latency = Math.round(performance.now() - startTime);
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          ok: true,
+          latency,
+          endpoint: url,
+          data
+        };
+      }
+      return {
+        ok: false,
+        latency,
+        endpoint: url,
+        status: res.status,
+        error: `HTTP ${res.status}`
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        latency: Math.round(performance.now() - startTime),
+        endpoint: this.getApiUrl('/api/health'),
+        error: e.message
+      };
     }
   }
 

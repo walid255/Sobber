@@ -6,7 +6,7 @@
  * house timetable, reminders, and facility configuration) across all
  * connected browsers via Cloudflare Workers KV.
  * 
- * KV Bindings: SOBBER_KV (primary) or KV (fallback)
+ * KV Bindings: SOBBER_KV (primary) or KV (fallback, auto-discovered)
  * Storage Key: "sobber_state"
  */
 
@@ -83,7 +83,21 @@ const SEED_SOBBER_STATE = {
 };
 
 function getKV(context) {
-  return context.env?.SOBBER_KV || context.env?.KV || context.env?.SERENITYCARE_KV;
+  if (context.env?.SOBBER_KV) return context.env.SOBBER_KV;
+  if (context.env?.KV) return context.env.KV;
+  if (context.env?.SOBER_KV) return context.env.SOBER_KV;
+  if (context.env?.SERENITYCARE_KV) return context.env.SERENITYCARE_KV;
+  
+  // Auto-discover any bound KV namespace in context.env
+  if (context.env && typeof context.env === 'object') {
+    for (const key of Object.keys(context.env)) {
+      const val = context.env[key];
+      if (val && typeof val.get === 'function' && typeof val.put === 'function') {
+        return val;
+      }
+    }
+  }
+  return null;
 }
 
 export async function onRequestOptions() {
@@ -100,7 +114,7 @@ export async function onRequestGet(context) {
       return new Response(JSON.stringify({ 
         online: false,
         isDemoFallback: true,
-        message: 'Cloudflare KV binding not detected. Bind SOBBER_KV or KV in Cloudflare Pages Settings -> Functions.',
+        message: 'Cloudflare KV binding not detected. In Cloudflare Pages, go to Settings -> Functions -> KV namespace bindings and bind SOBBER_KV.',
         ...SEED_SOBBER_STATE
       }), {
         status: 200,
@@ -157,7 +171,7 @@ export async function onRequestPost(context) {
     if (!kv) {
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'Cloudflare KV namespace binding missing (bind SOBBER_KV or KV)' 
+        error: 'Cloudflare KV namespace binding missing. Please bind SOBBER_KV in Cloudflare Pages Settings -> Functions.' 
       }), {
         status: 500,
         headers: JSON_HEADERS

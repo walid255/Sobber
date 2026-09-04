@@ -259,7 +259,133 @@ class ModalSystem {
       });
     });
 
-    document.getElementById('close-login-btn').onclick = () => this.close();
+  async showCloudDiagnosticModal() {
+    this.init();
+    const loadingHtml = `
+      <div class="text-center p-6 space-y-4">
+        <div class="w-12 h-12 rounded-full border-4 border-teal-500 border-t-transparent animate-spin mx-auto"></div>
+        <p class="text-xs font-bold text-slate-700">Testing Cloudflare Workers KV &amp; Cloud Connection...</p>
+      </div>
+    `;
+    this.showCustom(loadingHtml, 'max-w-lg');
+
+    const conn = await window.AppStore.checkConnectivity();
+    const isConnected = window.AppStore.isCloudConnected;
+    const lastSync = window.AppStore.lastSyncedAt ? new Date(window.AppStore.lastSyncedAt).toLocaleTimeString() : 'Never';
+    const state = window.AppStore.getState();
+    const currentEndpoint = localStorage.getItem('sobber_cloud_endpoint') || '';
+
+    const html = `
+      <div class="space-y-4 text-xs">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+          <div class="flex items-center gap-2">
+            <div class="w-9 h-9 rounded-xl ${isConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} flex items-center justify-center font-bold">
+              <i data-lucide="${isConnected ? 'cloud-check' : 'cloud-off'}" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Multi-Device Cloud Sync Diagnostics</h3>
+              <p class="text-[11px] text-slate-500">Real-time replication status across PC, mobile, and staff devices</p>
+            </div>
+          </div>
+          <button id="close-diag-modal-btn" class="p-1 rounded-lg hover:bg-slate-100 text-slate-400">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Status Card -->
+        <div class="p-4 rounded-xl border ${isConnected ? 'border-emerald-200 bg-emerald-50/40 text-emerald-900' : 'border-rose-200 bg-rose-50/40 text-rose-900'} space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}"></span>
+              ${isConnected ? 'Cloudflare Workers KV Active (Global Live Sync)' : 'Local Storage Only (Not Synced to Phone)'}
+            </span>
+            <span class="text-[10px] font-mono font-bold">${conn.latency}ms latency</span>
+          </div>
+          <p class="text-[11px] leading-relaxed">
+            ${isConnected 
+              ? 'Any record added on your PC (residents, staff, MAR doses, inventory) immediately syncs to your phone and all connected devices.' 
+              : 'Changes are currently saving on this browser only. Your phone cannot see updates until Cloudflare KV is bound or a cloud endpoint is connected.'}
+          </p>
+        </div>
+
+        <!-- Metrics Grid -->
+        <div class="grid grid-cols-3 gap-2 text-center text-[11px]">
+          <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50">
+            <span class="text-slate-400 block text-[9px] uppercase font-bold">Residents</span>
+            <strong class="text-slate-800 text-sm">${state.patients ? state.patients.length : 0}</strong>
+          </div>
+          <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50">
+            <span class="text-slate-400 block text-[9px] uppercase font-bold">Staff Accounts</span>
+            <strong class="text-slate-800 text-sm">${state.users ? state.users.length : 0}</strong>
+          </div>
+          <div class="p-2.5 rounded-xl border border-slate-200 bg-slate-50">
+            <span class="text-slate-400 block text-[9px] uppercase font-bold">Last Synced</span>
+            <strong class="text-slate-800 font-mono text-[10px]">${lastSync}</strong>
+          </div>
+        </div>
+
+        ${!isConnected ? `
+          <!-- Cloudflare KV 30-Second Setup Guide -->
+          <div class="p-3.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 space-y-2 text-[11px]">
+            <div class="font-bold flex items-center gap-1.5 text-amber-800">
+              <i data-lucide="help-circle" class="w-4 h-4 text-amber-600"></i>
+              How to enable Global Cloud Sync in 30 seconds:
+            </div>
+            <ol class="list-decimal list-inside space-y-1 text-slate-700 text-[11px]">
+              <li>Log in to <a href="https://dash.cloudflare.com" target="_blank" class="underline text-teal-700 font-bold">dash.cloudflare.com</a> and open your Pages project.</li>
+              <li>Go to <strong>Settings</strong> &rarr; <strong>Functions</strong> &rarr; <strong>KV namespace bindings</strong>.</li>
+              <li>Click <strong>Add binding</strong>: set Variable name to <code class="bg-amber-100 text-amber-900 px-1 py-0.5 rounded font-mono font-bold">SOBBER_KV</code> and select your KV namespace.</li>
+              <li>Redeploy or refresh, and both PC and Phone will sync in real time!</li>
+            </ol>
+          </div>
+        ` : ''}
+
+        <!-- Custom Cloud Endpoint (Optional for Custom Workers) -->
+        <div class="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+          <label class="block font-bold text-slate-700 text-[11px]">
+            Custom Remote Cloud Endpoint (Optional)
+          </label>
+          <div class="flex gap-2">
+            <input type="url" id="custom-cloud-endpoint-input" placeholder="https://serenitycare.workers.dev (leave blank for default)" value="${currentEndpoint}" class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono">
+            <button type="button" id="save-endpoint-btn" class="px-3 py-1.5 rounded-lg btn-decor-secondary font-bold text-xs">Save</button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-3 border-t border-slate-200">
+          <button type="button" id="force-cloud-sync-btn" class="px-4 py-2 rounded-xl btn-decor-primary font-bold text-xs flex items-center gap-1.5">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            <span>Test &amp; Sync Now</span>
+          </button>
+          <button type="button" id="close-diag-btn" class="px-4 py-2 rounded-xl btn-decor-secondary font-semibold text-xs">
+            Close
+          </button>
+        </div>
+      </div>
+    `;
+
+    this.showCustom(html, 'max-w-lg');
+
+    document.getElementById('close-diag-modal-btn').onclick = () => this.close();
+    document.getElementById('close-diag-btn').onclick = () => this.close();
+
+    document.getElementById('save-endpoint-btn').onclick = () => {
+      const val = document.getElementById('custom-cloud-endpoint-input').value.trim();
+      if (val) {
+        localStorage.setItem('sobber_cloud_endpoint', val);
+      } else {
+        localStorage.removeItem('sobber_cloud_endpoint');
+      }
+      window.AppStore.syncFromServer();
+      this.close();
+    };
+
+    document.getElementById('force-cloud-sync-btn').onclick = async () => {
+      await window.AppStore.syncFromServer();
+      await window.AppStore.pushToServer();
+      this.showCloudDiagnosticModal();
+    };
+
+    if (window.lucide) window.lucide.createIcons();
   }
 }
 

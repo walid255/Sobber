@@ -39,6 +39,10 @@ class AppRouter {
       this.updateCloudSyncStatus();
     });
 
+    window.AppStore.subscribe('sync:error', () => {
+      this.updateCloudSyncStatus();
+    });
+
     // Trigger immediate Cloudflare Workers KV state sync (SOBBER_KV)
     if (window.AppStore) {
       window.AppStore.syncFromServer();
@@ -469,20 +473,72 @@ class AppRouter {
   }
 
   updateCloudSyncStatus() {
+    const isConnected = window.AppStore.isCloudConnected;
+    const isSyncing = window.AppStore.isSyncing;
+    const lastSync = window.AppStore.lastSyncedAt;
+    const cloudError = window.AppStore.cloudError;
+
+    // 1. Sidebar status
     const pulse = document.getElementById('cloud-sync-pulse');
     const label = document.getElementById('cloud-sync-label');
-    if (!pulse || !label) return;
+    if (pulse && label) {
+      if (isConnected) {
+        pulse.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        label.textContent = 'Cloudflare KV Synced';
+        label.title = `Globally connected. Last sync: ${lastSync || 'Active'}`;
+      } else if (isSyncing) {
+        pulse.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+        label.textContent = 'Syncing KV...';
+      } else {
+        pulse.className = 'w-2 h-2 rounded-full bg-rose-500';
+        label.textContent = 'Local Mode (Offline)';
+        label.title = cloudError || 'Changes stored locally only';
+      }
+    }
 
-    if (window.AppStore.isCloudConnected) {
-      pulse.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
-      label.textContent = 'Cloudflare KV Synced';
-      label.title = `Globally connected. Last sync: ${window.AppStore.lastSyncedAt || 'Active'}`;
-    } else if (window.AppStore.isSyncing) {
-      pulse.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
-      label.textContent = 'Syncing KV...';
-    } else {
-      pulse.className = 'w-2 h-2 rounded-full bg-teal-400';
-      label.textContent = 'Local Store Active';
+    // 2. Top Header status
+    const topPulse = document.getElementById('top-sync-pulse');
+    const topLabel = document.getElementById('top-sync-label');
+    if (topPulse && topLabel) {
+      if (isConnected) {
+        topPulse.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        topLabel.textContent = 'KV Synced';
+        topLabel.className = 'text-[11px] font-bold text-emerald-700 hidden sm:inline';
+      } else if (isSyncing) {
+        topPulse.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+        topLabel.textContent = 'Syncing...';
+        topLabel.className = 'text-[11px] font-bold text-amber-700 hidden sm:inline';
+      } else {
+        topPulse.className = 'w-2 h-2 rounded-full bg-rose-500';
+        topLabel.textContent = 'Local Only';
+        topLabel.className = 'text-[11px] font-bold text-rose-600 hidden sm:inline';
+      }
+    }
+
+    // 3. Login screen sync indicator
+    const loginPulse = document.getElementById('login-sync-pulse');
+    const loginLabel = document.getElementById('login-sync-label');
+    if (loginPulse && loginLabel) {
+      if (isConnected) {
+        loginPulse.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        loginLabel.textContent = 'Cloud Sync Active';
+      } else if (isSyncing) {
+        loginPulse.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+        loginLabel.textContent = 'Checking Cloud...';
+      } else {
+        loginPulse.className = 'w-2 h-2 rounded-full bg-rose-500';
+        loginLabel.textContent = 'Local Storage Mode';
+      }
+    }
+
+    // 4. Warning banner
+    const banner = document.getElementById('cloud-sync-warning-banner');
+    if (banner) {
+      if (!isConnected && !isSyncing) {
+        banner.classList.remove('hidden');
+      } else {
+        banner.classList.add('hidden');
+      }
     }
   }
 
@@ -524,6 +580,58 @@ document.addEventListener('DOMContentLoaded', () => {
   if (reminderBellBtn) {
     reminderBellBtn.onclick = () => {
       window.AppReminders.showRemindersListModal();
+    };
+  }
+
+  // Cloud Sync Diagnostics Button in Header
+  const headerCloudBtn = document.getElementById('header-cloud-sync-btn');
+  if (headerCloudBtn) {
+    headerCloudBtn.onclick = () => {
+      if (window.AppModal && window.AppModal.showCloudDiagnosticModal) {
+        window.AppModal.showCloudDiagnosticModal();
+      }
+    };
+  }
+
+  // Cloud Sync Status Container in Sidebar
+  const sidebarCloudBtn = document.getElementById('cloud-sync-status-container');
+  if (sidebarCloudBtn) {
+    sidebarCloudBtn.style.cursor = 'pointer';
+    sidebarCloudBtn.onclick = () => {
+      if (window.AppModal && window.AppModal.showCloudDiagnosticModal) {
+        window.AppModal.showCloudDiagnosticModal();
+      }
+    };
+  }
+
+  // Force Cloud Sync Button in Header
+  const forceSyncBtn = document.getElementById('header-force-sync-btn');
+  if (forceSyncBtn) {
+    forceSyncBtn.onclick = async () => {
+      const icon = document.getElementById('header-sync-icon');
+      if (icon) icon.classList.add('animate-spin');
+      await window.AppStore.syncFromServer();
+      setTimeout(() => {
+        if (icon) icon.classList.remove('animate-spin');
+      }, 500);
+    };
+  }
+
+  // Warning Banner Resolve Button
+  const bannerResolveBtn = document.getElementById('cloud-sync-resolve-btn');
+  if (bannerResolveBtn) {
+    bannerResolveBtn.onclick = () => {
+      if (window.AppModal && window.AppModal.showCloudDiagnosticModal) {
+        window.AppModal.showCloudDiagnosticModal();
+      }
+    };
+  }
+
+  // Login Screen Sync Button
+  const loginSyncBtn = document.getElementById('login-sync-now-btn');
+  if (loginSyncBtn) {
+    loginSyncBtn.onclick = async () => {
+      await window.AppStore.syncFromServer();
     };
   }
 

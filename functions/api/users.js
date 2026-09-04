@@ -45,7 +45,20 @@ const DEFAULT_ADMIN_USER = {
 };
 
 function getKV(context) {
-  return context.env?.SOBBER_KV || context.env?.KV || context.env?.SERENITYCARE_KV;
+  if (context.env?.SOBBER_KV) return context.env.SOBBER_KV;
+  if (context.env?.KV) return context.env.KV;
+  if (context.env?.SOBER_KV) return context.env.SOBER_KV;
+  if (context.env?.SERENITYCARE_KV) return context.env.SERENITYCARE_KV;
+  
+  if (context.env && typeof context.env === 'object') {
+    for (const key of Object.keys(context.env)) {
+      const val = context.env[key];
+      if (val && typeof val.get === 'function' && typeof val.put === 'function') {
+        return val;
+      }
+    }
+  }
+  return null;
 }
 
 export async function onRequestOptions() {
