@@ -176,6 +176,31 @@ export async function onRequestPost(context) {
 
     await kv.put('sobber_patients', JSON.stringify(currentList));
 
+    // Synchronize bed allocation if bedId or bedNumber provided
+    let beds = [];
+    const bRaw = await kv.get('sobber_beds', { type: 'text', cacheTtl: 0 });
+    if (bRaw) {
+      try {
+        beds = JSON.parse(bRaw);
+        let changed = false;
+        beds.forEach(b => {
+          if (b.patientId === patientItem.id && b.id !== patientItem.bedId && b.bedNumber !== patientItem.bedNumber) {
+            b.status = 'Available';
+            b.patientId = null;
+            changed = true;
+          }
+          if ((patientItem.bedId && b.id === patientItem.bedId) || (patientItem.bedNumber && b.bedNumber === patientItem.bedNumber)) {
+            b.status = 'Occupied';
+            b.patientId = patientItem.id;
+            changed = true;
+          }
+        });
+        if (changed) {
+          await kv.put('sobber_beds', JSON.stringify(beds));
+        }
+      } catch {}
+    }
+
     // Update in sobber_state
     const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
     let stateObj = null;
@@ -183,6 +208,7 @@ export async function onRequestPost(context) {
       try {
         stateObj = JSON.parse(stateRaw);
         stateObj.patients = currentList;
+        if (beds.length > 0) stateObj.beds = beds;
         stateObj.lastSyncedAt = new Date().toISOString();
         stateObj.stateVersion = Date.now();
         await kv.put('sobber_state', JSON.stringify(stateObj));
@@ -241,12 +267,33 @@ export async function onRequestDelete(context) {
 
     await kv.put('sobber_patients', JSON.stringify(list));
 
+    // Release any bed allocated to this resident
+    let beds = [];
+    const bRaw = await kv.get('sobber_beds', { type: 'text', cacheTtl: 0 });
+    if (bRaw) {
+      try {
+        beds = JSON.parse(bRaw);
+        let bedChanged = false;
+        beds.forEach(b => {
+          if (b.patientId === patientId) {
+            b.status = 'Available';
+            b.patientId = null;
+            bedChanged = true;
+          }
+        });
+        if (bedChanged) {
+          await kv.put('sobber_beds', JSON.stringify(beds));
+        }
+      } catch {}
+    }
+
     // Update sobber_state
     const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
     if (stateRaw) {
       try {
         const stateObj = JSON.parse(stateRaw);
         stateObj.patients = list;
+        if (beds.length > 0) stateObj.beds = beds;
         if (Array.isArray(stateObj.medicationLogs)) {
           stateObj.medicationLogs = stateObj.medicationLogs.filter(m => m.patientId !== patientId);
           await kv.put('sobber_medications', JSON.stringify(stateObj.medicationLogs));

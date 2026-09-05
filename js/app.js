@@ -13,6 +13,7 @@ class AppRouter {
       timetable: new window.TimetableView(),
       certificates: new window.CertificatesView(),
       'batch-upload': new window.BatchUploadView(),
+      rooms: new window.RoomsView(),
       users: new window.UsersView(),
       settings: new window.SettingsView()
     };
@@ -334,6 +335,7 @@ class AppRouter {
       inventory: 'Pharmacy & Store',
       certificates: 'Graduation & Release',
       'batch-upload': 'Batch CSV Import',
+      rooms: 'Rooms & Beds',
       users: 'Staff & RBAC',
       settings: 'Facility & Cloudflare'
     };

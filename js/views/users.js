@@ -217,6 +217,7 @@ class UsersView {
     const modules = [
       { key: 'dashboard', label: 'Dashboard & Metrics', desc: 'Real-time census and clinical KPI analytics' },
       { key: 'patients', label: 'Resident Registry', desc: 'Patient dossiers, next of kin, psychiatric notes' },
+      { key: 'rooms', label: 'Rooms & Beds', desc: 'Add, remove, and manage rooms and allocate beds' },
       { key: 'medications', label: 'Medications (MAR)', desc: 'Supervised dose delivery & MAR verification' },
       { key: 'timetable', label: 'House Timetable', desc: 'Daily schedule, chores, 12-step therapy meetings' },
       { key: 'inventory', label: 'Pharmacy & Store', desc: 'Facility stock, supplies, audits, and dispensing' },

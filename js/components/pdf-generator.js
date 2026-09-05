@@ -467,6 +467,285 @@ class DocumentGenerator {
   }
 
   /**
+   * Generates and previews an official payment receipt for an installment
+   */
+  openPaymentReceipt(patientId, installmentId) {
+    const state = this.store.getState();
+    const patient = state.patients.find(p => p.id === patientId);
+    const fee = this.store.getResidentFee(patientId);
+    const installments = this.store.getInstallmentPayments(patientId);
+    const facility = state.facility;
+
+    if (!patient || !fee) {
+      window.AppModal.alert('Error', 'Resident or fee schedule not found.', 'danger');
+      return;
+    }
+
+    const inst = (installmentId ? installments.find(i => i.id === installmentId) : null) ||
+                 installments.filter(i => i.status === 'Paid').slice(-1)[0] ||
+                 installments[0];
+
+    const currency = fee.currency || facility.currency || 'TZS';
+    const printAreaId = 'payment-receipt-print-area';
+    const receiptNo = inst.reference_no || `REC-${patient.id.replace(/\D/g, '')}-${inst.installment_number || '1'}`;
+    const paymentDate = inst.payment_date || new Date().toISOString().split('T')[0];
+
+    const html = `
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-200">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
+            <i data-lucide="receipt" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-800">Official Payment Receipt</h3>
+            <span class="text-xs text-slate-400 font-mono">${receiptNo}</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="print-receipt-btn" class="px-3.5 py-1.5 rounded-xl btn-decor-primary text-xs font-bold flex items-center gap-1.5 shadow-sm">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+            <span>Print Receipt</span>
+          </button>
+          <button id="close-receipt-btn" class="p-1 rounded-lg text-slate-400 hover:bg-slate-100">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Printable Receipt Canvas -->
+      <div id="${printAreaId}" class="p-6 bg-white border border-slate-200 rounded-2xl max-w-xl mx-auto space-y-6 text-slate-800">
+        <!-- Receipt Header -->
+        <div class="flex justify-between items-start border-b-2 border-teal-600 pb-4">
+          <div>
+            <h2 class="text-xl font-black tracking-tight text-teal-800">${facility.name}</h2>
+            <p class="text-xs text-slate-500 mt-0.5">${facility.tagline || 'Inpatient Addiction Treatment & Psychiatric Recovery'}</p>
+            <p class="text-[11px] text-slate-400 mt-1">${facility.address} &bull; Tel: ${facility.phone}</p>
+          </div>
+          <div class="text-right">
+            <span class="inline-block px-3 py-1 rounded-md bg-teal-50 border border-teal-200 text-teal-800 font-mono font-bold text-xs">
+              OFFICIAL RECEIPT
+            </span>
+            <div class="mt-2 text-right">
+              <span class="text-[10px] uppercase font-bold text-slate-400 block">Receipt No</span>
+              <strong class="font-mono text-xs text-slate-800">${receiptNo}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Meta Details Row -->
+        <div class="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase font-bold block mb-0.5">Resident / Patient:</span>
+            <strong class="text-slate-900 text-sm block">${patient.name}</strong>
+            <span class="text-slate-500 font-mono text-[11px]">ID: ${patient.id} &bull; Bed: ${patient.roomNumber} (${patient.bedNumber})</span>
+          </div>
+          <div class="text-right">
+            <span class="text-slate-400 text-[10px] uppercase font-bold block mb-0.5">Payment Details:</span>
+            <div class="font-mono text-xs text-slate-800">Date: <strong>${paymentDate}</strong></div>
+            <div class="text-slate-600 text-[11px] mt-0.5">Method: <strong class="text-slate-800">${inst.payment_method || 'Cash'}</strong></div>
+          </div>
+        </div>
+
+        <!-- Receipt Table -->
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b-2 border-slate-200 text-slate-400 text-[10px] uppercase font-bold">
+              <th class="py-2">Description</th>
+              <th class="py-2 text-center">Installment</th>
+              <th class="py-2 text-right">Amount Paid</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr>
+              <td class="py-3 font-semibold text-slate-800">
+                Inpatient Addiction Treatment &amp; Recovery Program
+                <div class="text-[10px] text-slate-400 font-normal">Plan: ${fee.payment_plan} (${fee.frequency || 'Monthly'} cycle)</div>
+              </td>
+              <td class="py-3 text-center font-bold text-slate-700">
+                ${inst.installment_number === 1 ? '1 (Admission Deposit)' : `#${inst.installment_number}`}
+              </td>
+              <td class="py-3 text-right font-mono font-black text-sm text-emerald-800">
+                ${Number(inst.amount_paid || inst.amount_due).toLocaleString()} ${currency}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Totals & Balances -->
+        <div class="border-t-2 border-slate-200 pt-3 space-y-1.5 text-xs">
+          <div class="flex justify-between text-slate-600">
+            <span>Total Program Fee:</span>
+            <span class="font-mono font-semibold">${Number(fee.total_fee).toLocaleString()} ${currency}</span>
+          </div>
+          <div class="flex justify-between text-slate-600">
+            <span>Total Cumulative Paid:</span>
+            <span class="font-mono font-semibold text-emerald-700">${Number(fee.paid_amount).toLocaleString()} ${currency}</span>
+          </div>
+          <div class="flex justify-between items-center text-sm font-black border-t border-slate-200 pt-2 text-slate-900">
+            <span>Remaining Balance Due:</span>
+            <span class="font-mono ${Number(fee.remaining_balance) > 0 ? 'text-rose-700' : 'text-emerald-700'}">
+              ${Number(fee.remaining_balance).toLocaleString()} ${currency}
+            </span>
+          </div>
+        </div>
+
+        <!-- Signatures & Footer -->
+        <div class="pt-6 border-t border-dashed border-slate-300 flex justify-between items-end text-[11px] text-slate-500">
+          <div class="w-44 text-center border-t border-slate-400 pt-1">
+            <span class="font-semibold text-slate-800">${state.currentUser ? state.currentUser.name : 'Authorized Cashier'}</span><br>
+            SerenityCare Finance / Accounts
+          </div>
+          <div class="w-44 text-center border-t border-slate-400 pt-1">
+            <span class="font-semibold text-slate-800">Patient / Guarantor</span><br>
+            Received &amp; Acknowledged
+          </div>
+        </div>
+      </div>
+    `;
+
+    window.AppModal.showCustom(html, 'max-w-2xl');
+
+    document.getElementById('close-receipt-btn').onclick = () => window.AppModal.close();
+    document.getElementById('print-receipt-btn').onclick = () => this.printElement(printAreaId, `Receipt_${receiptNo}`);
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  /**
+   * Generates a complete Financial Statement of Account for a resident
+   */
+  openPaymentStatement(patientId) {
+    const state = this.store.getState();
+    const patient = state.patients.find(p => p.id === patientId);
+    const fee = this.store.getResidentFee(patientId);
+    const installments = this.store.getInstallmentPayments(patientId);
+    const facility = state.facility;
+
+    if (!patient || !fee) {
+      window.AppModal.alert('Error', 'Resident or fee schedule not found.', 'danger');
+      return;
+    }
+
+    const currency = fee.currency || facility.currency || 'TZS';
+    const printAreaId = 'statement-print-area';
+
+    const html = `
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-200">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center">
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-800">Resident Statement of Account</h3>
+            <span class="text-xs text-slate-400 font-mono">${patient.name} (${patient.id})</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="print-stmt-btn" class="px-3.5 py-1.5 rounded-xl btn-decor-primary text-xs font-bold flex items-center gap-1.5 shadow-sm">
+            <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+            <span>Print Statement</span>
+          </button>
+          <button id="close-stmt-btn" class="p-1 rounded-lg text-slate-400 hover:bg-slate-100">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Printable Statement Canvas -->
+      <div id="${printAreaId}" class="p-6 bg-white border border-slate-200 rounded-2xl max-w-2xl mx-auto space-y-6 text-slate-800">
+        <!-- Header -->
+        <div class="flex justify-between items-start border-b-2 border-teal-600 pb-4">
+          <div>
+            <h2 class="text-xl font-black text-teal-800">${facility.name}</h2>
+            <p class="text-xs text-slate-500">${facility.tagline || 'Inpatient Addiction Treatment Center'}</p>
+            <p class="text-[11px] text-slate-400">${facility.address} &bull; ${facility.phone}</p>
+          </div>
+          <div class="text-right">
+            <span class="inline-block px-3 py-1 rounded-md bg-slate-100 font-mono font-bold text-xs text-slate-800">
+              STATEMENT OF ACCOUNT
+            </span>
+            <div class="text-[11px] text-slate-500 mt-1">Generated: ${new Date().toLocaleDateString()}</div>
+          </div>
+        </div>
+
+        <!-- Resident Details -->
+        <div class="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase font-bold block">Resident:</span>
+            <strong class="text-slate-900 text-sm">${patient.name}</strong>
+            <div class="text-slate-500">ID: ${patient.id} &bull; Bed: ${patient.roomNumber} - ${patient.bedNumber}</div>
+            <div class="text-slate-500">Admission Date: ${patient.admissionDate}</div>
+          </div>
+          <div>
+            <span class="text-slate-400 text-[10px] uppercase font-bold block">Guarantor / Next of Kin:</span>
+            <strong class="text-slate-800">${patient.nextOfKin ? patient.nextOfKin.name : 'N/A'}</strong>
+            <div class="text-slate-500">${patient.nextOfKin ? `${patient.nextOfKin.relationship} &bull; ${patient.nextOfKin.phone}` : ''}</div>
+          </div>
+        </div>
+
+        <!-- Fee Summary Overview -->
+        <div class="grid grid-cols-3 gap-3 text-xs">
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Total Agreed Fee</span>
+            <strong class="text-sm font-mono text-slate-900">${Number(fee.total_fee).toLocaleString()} ${currency}</strong>
+          </div>
+          <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+            <span class="text-[10px] uppercase font-bold text-emerald-700 block">Total Paid to Date</span>
+            <strong class="text-sm font-mono text-emerald-800">${Number(fee.paid_amount).toLocaleString()} ${currency}</strong>
+          </div>
+          <div class="p-3 rounded-xl bg-rose-50 border border-rose-200">
+            <span class="text-[10px] uppercase font-bold text-rose-700 block">Outstanding Balance</span>
+            <strong class="text-sm font-mono text-rose-800">${Number(fee.remaining_balance).toLocaleString()} ${currency}</strong>
+          </div>
+        </div>
+
+        <!-- Ledger of Installments -->
+        <div>
+          <h4 class="text-xs font-bold text-slate-700 mb-2 uppercase">Scheduled Installments &amp; Payments</h4>
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b-2 border-slate-200 text-slate-400 text-[10px] uppercase font-bold">
+                <th class="py-2">Inst #</th>
+                <th class="py-2">Due Date</th>
+                <th class="py-2">Amount Due</th>
+                <th class="py-2">Amount Paid</th>
+                <th class="py-2">Status</th>
+                <th class="py-2">Paid Date &amp; Ref</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${installments.map(i => `
+                <tr>
+                  <td class="py-2.5 font-bold text-slate-800">${i.installment_number === 1 ? '1 (Deposit)' : `#${i.installment_number}`}</td>
+                  <td class="py-2.5 font-mono text-slate-600">${i.due_date || 'N/A'}</td>
+                  <td class="py-2.5 font-mono text-slate-900">${Number(i.amount_due).toLocaleString()} ${currency}</td>
+                  <td class="py-2.5 font-mono font-bold ${i.status === 'Paid' ? 'text-emerald-700' : 'text-slate-500'}">${Number(i.amount_paid||0).toLocaleString()} ${currency}</td>
+                  <td class="py-2.5"><span class="font-bold text-[11px] ${i.status === 'Paid' ? 'text-emerald-700' : 'text-amber-700'}">${i.status}</span></td>
+                  <td class="py-2.5 text-slate-600 font-mono text-[11px]">${i.payment_date || '-'} ${i.reference_no ? `(${i.reference_no})` : ''}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Signature -->
+        <div class="pt-8 border-t border-slate-200 flex justify-between items-end text-xs text-slate-500">
+          <div>Official accounting record of SerenityCare Addiction Recovery Center.</div>
+          <div class="w-48 text-center border-t border-slate-400 pt-1">
+            <span class="font-semibold text-slate-800">Finance &amp; Admissions</span><br>
+            Authorized Signatory
+          </div>
+        </div>
+      </div>
+    `;
+
+    window.AppModal.showCustom(html, 'max-w-3xl');
+
+    document.getElementById('close-stmt-btn').onclick = () => window.AppModal.close();
+    document.getElementById('print-stmt-btn').onclick = () => this.printElement(printAreaId, `Statement_${patient.id}`);
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  /**
    * Helper to print a specific DOM element using a clean print window
    */
   printElement(elementId, title = 'Document') {

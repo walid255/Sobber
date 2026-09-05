@@ -8,6 +8,7 @@ const ROLE_PERMISSIONS = {
     title: 'Super Administrator / Director',
     badgeClass: 'badge-medical-rose',
     canManageUsers: true,
+    canManageRooms: true,
     canEditFacilitySettings: true,
     canViewAllPatients: true,
     canEditPatientBio: true,
@@ -121,7 +122,7 @@ class AuthService {
   }
 
   getAllowedRoutes() {
-    const allRoutes = ['dashboard', 'patients', 'medications', 'timetable', 'inventory', 'certificates', 'batch-upload', 'users', 'settings'];
+    const allRoutes = ['dashboard', 'patients', 'rooms', 'medications', 'timetable', 'inventory', 'certificates', 'batch-upload', 'users', 'settings'];
     return allRoutes.filter(r => this.hasPermission(r));
   }
 
