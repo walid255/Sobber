@@ -13,7 +13,6 @@ class AppRouter {
       timetable: new window.TimetableView(),
       certificates: new window.CertificatesView(),
       'batch-upload': new window.BatchUploadView(),
-      rooms: new window.RoomsView(),
       users: new window.UsersView(),
       settings: new window.SettingsView()
     };
@@ -335,7 +334,6 @@ class AppRouter {
       inventory: 'Pharmacy & Store',
       certificates: 'Graduation & Release',
       'batch-upload': 'Batch CSV Import',
-      rooms: 'Rooms & Beds',
       users: 'Staff & RBAC',
       settings: 'Facility & Cloudflare'
     };
@@ -556,9 +554,60 @@ class AppRouter {
   }
 }
 
+// Render data in UI
+function renderApp(data) {
+  if (data && typeof data === 'object') {
+    if (window.AppStore) {
+      if (Array.isArray(data.users) || Array.isArray(data.patients) || data.facility) {
+        window.AppStore.applyRemoteState(data, true);
+      }
+    }
+  }
+  if (window.AppRouter && typeof window.AppRouter.checkAuthAndRender === 'function') {
+    window.AppRouter.checkAuthAndRender();
+  }
+}
+window.renderApp = renderApp;
+
+// Global content loader
+async function loadContent() {
+  if (window.AppStore && typeof window.AppStore.loadContent === 'function') {
+    return await window.AppStore.loadContent();
+  }
+  try {
+    let customEndpoint = '';
+    try {
+      customEndpoint = localStorage.getItem('sobber_cloud_endpoint') || '';
+    } catch (e) {}
+    let base = (customEndpoint && customEndpoint.trim().startsWith('http')) 
+      ? customEndpoint.trim().replace(/\/+$/, '') 
+      : '';
+    const sep = base.includes('?') ? '&' : '?';
+    const response = await fetch(`${base}/api/content${sep}_t=${Date.now()}`, {
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache'
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      renderApp(data);
+      return data;
+    }
+  } catch (err) {
+    console.debug('loadContent fallback:', err);
+  }
+}
+window.loadContent = loadContent;
+
 // Bootstrap once DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   window.AppRouter = new AppRouter();
+
+  // Call on app startup
+  loadContent();
 
   // Bind Sidebar Nav Links
   document.querySelectorAll('.nav-link').forEach(link => {

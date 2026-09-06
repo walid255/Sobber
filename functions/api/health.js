@@ -60,9 +60,6 @@ export async function onRequestGet(context) {
     }
   }
 
-  let d1Connected = Boolean(context.env?.DB);
-  let r2Connected = Boolean(context.env?.BUCKET);
-
   return new Response(JSON.stringify({
     system: 'SerenityCare Recovery Management System',
     status: 'healthy',
@@ -72,20 +69,15 @@ export async function onRequestGet(context) {
       kvBound: Boolean(kv),
       kvBindingName: context.env?.SOBBER_KV ? 'SOBBER_KV' : (context.env?.KV ? 'KV' : 'None'),
       kvOperational: kvReadWriteOk,
-      d1Connected,
-      r2Connected,
       error: errorDetail
     },
     endpoints: [
       '/api/sync',
       '/api/users',
       '/api/patients',
-      '/api/rooms',
-      '/api/payments',
       '/api/medications',
       '/api/inventory',
       '/api/timetable',
-      '/api/upload',
       '/api/health'
     ]
   }), {

@@ -185,6 +185,32 @@ class SettingsView {
             </div>
           </div>
 
+          <!-- Cloud Endpoint & Admin Secret Settings -->
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3 mb-4 text-xs">
+            <div class="font-bold text-slate-800 flex items-center gap-1.5">
+              <i data-lucide="shield-check" class="w-4 h-4 text-teal-600"></i>
+              <span>Cloud API &amp; Bearer Authentication (KV Write Protection)</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label class="block font-semibold text-slate-700 text-[11px] mb-1">Remote Cloud Endpoint (Optional)</label>
+                <input type="url" id="settings-cloud-endpoint" placeholder="https://your-worker-subdomain.workers.dev" value="${localStorage.getItem('sobber_cloud_endpoint') || ''}" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono">
+                <span class="text-[10px] text-slate-400 block mt-0.5">Leave blank to use current origin / Pages Functions.</span>
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-700 text-[11px] mb-1">Admin Secret / Bearer Token</label>
+                <input type="password" id="settings-admin-secret" placeholder="YOUR_ADMIN_SECRET" value="${localStorage.getItem('sobber_admin_secret') || ''}" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono">
+                <span class="text-[10px] text-slate-400 block mt-0.5">Sent as <code class="font-mono bg-slate-200 px-1 py-0.5 rounded text-slate-700">Authorization: Bearer &lt;SECRET&gt;</code> on KV write operations.</span>
+              </div>
+            </div>
+            <div class="flex justify-end">
+              <button type="button" id="save-cloud-config-btn" class="px-4 py-1.5 rounded-lg btn-decor-primary font-bold text-xs flex items-center gap-1.5">
+                <i data-lucide="save" class="w-3.5 h-3.5"></i>
+                <span>Save Cloud Authentication</span>
+              </button>
+            </div>
+          </div>
+
           <div class="flex items-center justify-between pt-2">
             <span class="text-xs text-slate-400">Deployment scripts available in <code>cloudflare/</code> directory</span>
             <button id="test-cf-btn" class="px-4 py-2 rounded-xl text-xs font-semibold btn-decor-secondary flex items-center gap-1.5">
@@ -260,10 +286,28 @@ class SettingsView {
       window.AppModal.alert('Settings Saved', 'Facility details and legal signatories updated successfully.', 'success');
     };
 
+    // Save Cloud Config & Bearer Auth
+    const saveCloudBtn = document.getElementById('save-cloud-config-btn');
+    if (saveCloudBtn) {
+      saveCloudBtn.onclick = () => {
+        const ep = document.getElementById('settings-cloud-endpoint').value.trim();
+        const sec = document.getElementById('settings-admin-secret').value.trim();
+        if (ep) localStorage.setItem('sobber_cloud_endpoint', ep);
+        else localStorage.removeItem('sobber_cloud_endpoint');
+
+        if (sec) localStorage.setItem('sobber_admin_secret', sec);
+        else localStorage.removeItem('sobber_admin_secret');
+
+        window.AppStore.syncFromServer();
+        window.AppModal.alert('Cloud Configuration Saved', 'Cloud endpoint and Bearer authentication token successfully saved.', 'success');
+      };
+    }
+
     // Test Cloudflare Connection
     document.getElementById('test-cf-btn').onclick = async () => {
       let isLive = false;
       let latency = 0;
+      let authStatus = 'Open KV access (No secret set on client)';
       const startTime = performance.now();
       try {
         const url = window.AppStore ? window.AppStore.getApiUrl('/api/health') : `/api/health?_t=${Date.now()}`;
@@ -272,6 +316,11 @@ class SettingsView {
         isLive = res.ok;
       } catch (e) {
         latency = Math.round(performance.now() - startTime);
+      }
+
+      const configuredSecret = localStorage.getItem('sobber_admin_secret');
+      if (configuredSecret) {
+        authStatus = `Configured (Bearer ${configuredSecret.substring(0, 4)}***)`;
       }
 
       window.AppModal.showAcceptanceCard({
@@ -283,11 +332,11 @@ class SettingsView {
         confirmType: 'success',
         contentHtml: `
           <div class="space-y-2 text-xs text-slate-600">
-            <p>✔ <strong>Cloudflare Pages Functions:</strong> <code>/functions/api/sync.js</code> &amp; <code>/functions/api/users.js</code></p>
+            <p>✔ <strong>Cloudflare Functions:</strong> <code>/api/content</code>, <code>/api/sync</code>, <code>/api/users</code></p>
             <p>✔ <strong>Cloudflare KV Storage:</strong> Bound to <code>SOBBER_KV</code> &amp; <code>KV</code></p>
+            <p>✔ <strong>Bearer Authentication:</strong> ${authStatus}</p>
             <p>✔ <strong>Dedicated Endpoints:</strong> <code>/api/patients</code>, <code>/api/medications</code>, <code>/api/inventory</code>, <code>/api/timetable</code></p>
             <p>✔ <strong>Global Multi-Browser Sync:</strong> Live replication enabled across all connected devices</p>
-            <p>✔ <strong>Direct Upload Assets:</strong> <code>_redirects</code> &amp; <code>404.html</code> verified</p>
             <p class="text-teal-700 font-semibold mt-2">${isLive ? `Live Cloudflare KV edge connection active (${latency}ms).` : 'Local preview fallback active. Deploy via Cloudflare Pages or wrangler pages dev.'}</p>
           </div>
         `,

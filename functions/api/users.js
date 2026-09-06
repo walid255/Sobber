@@ -48,6 +48,7 @@ const DEFAULT_ADMIN_USER = {
 
 function getKV(context) {
   if (context.env?.SOBBER_KV) return context.env.SOBBER_KV;
+  if (context.env?.MY_KV_NAMESPACE) return context.env.MY_KV_NAMESPACE;
   if (context.env?.KV) return context.env.KV;
   if (context.env?.SOBER_KV) return context.env.SOBER_KV;
   if (context.env?.SERENITYCARE_KV) return context.env.SERENITYCARE_KV;
@@ -61,6 +62,14 @@ function getKV(context) {
     }
   }
   return null;
+}
+
+function isAuthorized(context) {
+  const secret = context.env?.ADMIN_SECRET || context.env?.AUTH_SECRET || context.env?.SOBBER_ADMIN_SECRET;
+  if (!secret) return true;
+  const authHeader = context.request.headers.get('Authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  return token === secret.trim();
 }
 
 export async function onRequestOptions() {
@@ -124,6 +133,16 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   try {
+    if (!isAuthorized(context)) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Unauthorized: Invalid or missing Bearer token in Authorization header' 
+      }), { 
+        status: 401, 
+        headers: JSON_HEADERS 
+      });
+    }
+
     const kv = getKV(context);
     if (!kv) {
       return new Response(JSON.stringify({ 
@@ -219,6 +238,16 @@ export async function onRequestPost(context) {
 
 export async function onRequestDelete(context) {
   try {
+    if (!isAuthorized(context)) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Unauthorized: Invalid or missing Bearer token in Authorization header' 
+      }), { 
+        status: 401, 
+        headers: JSON_HEADERS 
+      });
+    }
+
     const kv = getKV(context);
     if (!kv) {
       return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: JSON_HEADERS });

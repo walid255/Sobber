@@ -26,6 +26,18 @@ class SobberApiService {
     });
   }
 
+  getHeaders(customHeaders = {}) {
+    if (window.AppStore && typeof window.AppStore.getAuthHeaders === 'function') {
+      return window.AppStore.getAuthHeaders(customHeaders);
+    }
+    const headers = { ...customHeaders };
+    const secret = (typeof localStorage !== 'undefined' && localStorage.getItem('sobber_admin_secret')) || '';
+    if (secret && secret.trim()) {
+      headers['Authorization'] = `Bearer ${secret.trim()}`;
+    }
+    return headers;
+  }
+
   /**
    * Ping Cloudflare Healthcheck endpoint to verify KV binding (SOBBER_KV / KV)
    */
@@ -92,12 +104,12 @@ class SobberApiService {
       const url = window.AppStore ? window.AppStore.getApiUrl('/api/users') : `/api/users?_t=${Date.now()}`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 
+        headers: this.getHeaders({ 
           'Content-Type': 'application/json', 
           'Accept': 'application/json',
           'Cache-Control': 'no-store, no-cache, must-revalidate',
           'Pragma': 'no-cache'
-        },
+        }),
         body: JSON.stringify(userData)
       });
       if (res.ok) {
@@ -123,11 +135,11 @@ class SobberApiService {
       const url = window.AppStore ? window.AppStore.getApiUrl(`/api/users?id=${encodeURIComponent(userId)}`) : `/api/users?id=${encodeURIComponent(userId)}&_t=${Date.now()}`;
       const res = await fetch(url, {
         method: 'DELETE',
-        headers: { 
+        headers: this.getHeaders({ 
           'Accept': 'application/json',
           'Cache-Control': 'no-store, no-cache, must-revalidate',
           'Pragma': 'no-cache'
-        }
+        })
       });
       if (res.ok) {
         if (window.AppStore) await window.AppStore.syncFromServer();
@@ -173,12 +185,12 @@ class SobberApiService {
       const url = window.AppStore ? window.AppStore.getApiUrl('/api/patients') : `/api/patients?_t=${Date.now()}`;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 
+        headers: this.getHeaders({ 
           'Content-Type': 'application/json', 
           'Accept': 'application/json',
           'Cache-Control': 'no-store, no-cache, must-revalidate',
           'Pragma': 'no-cache'
-        },
+        }),
         body: JSON.stringify(patientData)
       });
       if (res.ok) {
@@ -191,6 +203,26 @@ class SobberApiService {
     }
     if (window.AppStore) {
       return await window.AppStore.addPatient(patientData);
+    }
+    return null;
+  }
+
+  /**
+   * Global Content & KV Submission helper
+   */
+  async saveContent(newData) {
+    if (window.AppStore && typeof window.AppStore.saveContent === 'function') {
+      return await window.AppStore.saveContent(newData);
+    }
+    return null;
+  }
+
+  /**
+   * Global Content Retrieval helper
+   */
+  async loadContent() {
+    if (window.AppStore && typeof window.AppStore.loadContent === 'function') {
+      return await window.AppStore.loadContent();
     }
     return null;
   }

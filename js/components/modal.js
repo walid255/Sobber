@@ -274,6 +274,7 @@ class ModalSystem {
     const lastSync = window.AppStore.lastSyncedAt ? new Date(window.AppStore.lastSyncedAt).toLocaleTimeString() : 'Never';
     const state = window.AppStore.getState();
     const currentEndpoint = localStorage.getItem('sobber_cloud_endpoint') || '';
+    const currentSecret = localStorage.getItem('sobber_admin_secret') || '';
 
     const html = `
       <div class="space-y-4 text-xs">
@@ -340,14 +341,25 @@ class ModalSystem {
           </div>
         ` : ''}
 
-        <!-- Custom Cloud Endpoint (Optional for Custom Workers) -->
-        <div class="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
-          <label class="block font-bold text-slate-700 text-[11px]">
-            Custom Remote Cloud Endpoint (Optional)
-          </label>
-          <div class="flex gap-2">
-            <input type="url" id="custom-cloud-endpoint-input" placeholder="https://serenitycare.workers.dev (leave blank for default)" value="${currentEndpoint}" class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono">
-            <button type="button" id="save-endpoint-btn" class="px-3 py-1.5 rounded-lg btn-decor-secondary font-bold text-xs">Save</button>
+        <!-- Custom Cloud Endpoint & Admin Secret (Optional for Custom Workers / Authorization) -->
+        <div class="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-2.5">
+          <div>
+            <label class="block font-bold text-slate-700 text-[11px] mb-1">
+              Custom Remote Cloud Endpoint (Optional)
+            </label>
+            <input type="url" id="custom-cloud-endpoint-input" placeholder="https://your-worker-subdomain.workers.dev" value="${currentEndpoint}" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono">
+            <span class="text-[10px] text-slate-400 block mt-0.5">Leave blank to use current origin / Cloudflare Pages default.</span>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 text-[11px] mb-1">
+              Admin Secret / Bearer Token (Optional Authorization)
+            </label>
+            <div class="flex gap-2">
+              <input type="password" id="custom-admin-secret-input" placeholder="e.g. YOUR_ADMIN_SECRET" value="${currentSecret}" class="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-mono">
+              <button type="button" id="save-endpoint-btn" class="px-3 py-1.5 rounded-lg btn-decor-primary font-bold text-xs">Save</button>
+            </div>
+            <span class="text-[10px] text-slate-400 block mt-0.5">Sent as <code class="font-mono bg-slate-200 px-1 py-0.5 rounded text-slate-700">Authorization: Bearer &lt;SECRET&gt;</code> on write operations.</span>
           </div>
         </div>
 
@@ -369,11 +381,18 @@ class ModalSystem {
     document.getElementById('close-diag-btn').onclick = () => this.close();
 
     document.getElementById('save-endpoint-btn').onclick = () => {
-      const val = document.getElementById('custom-cloud-endpoint-input').value.trim();
-      if (val) {
-        localStorage.setItem('sobber_cloud_endpoint', val);
+      const endpointVal = document.getElementById('custom-cloud-endpoint-input').value.trim();
+      const secretVal = document.getElementById('custom-admin-secret-input').value.trim();
+      if (endpointVal) {
+        localStorage.setItem('sobber_cloud_endpoint', endpointVal);
       } else {
         localStorage.removeItem('sobber_cloud_endpoint');
+      }
+
+      if (secretVal) {
+        localStorage.setItem('sobber_admin_secret', secretVal);
+      } else {
+        localStorage.removeItem('sobber_admin_secret');
       }
       window.AppStore.syncFromServer();
       this.close();

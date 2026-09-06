@@ -255,9 +255,6 @@ class PatientsView {
    */
   openAddPatientModal() {
     const defaultPhoto = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
-    const state = window.AppStore.getState();
-    const availableBeds = window.AppStore.getAvailableBeds();
-    const currency = state.currency || (state.facility && state.facility.currency) || 'TZS';
 
     const html = `
       <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
@@ -267,7 +264,7 @@ class PatientsView {
           </div>
           <div>
             <h3 class="text-lg font-bold text-slate-900">Clinical Resident Admission</h3>
-            <p class="text-xs text-slate-500">Comprehensive intake evaluation, room allocation &amp; financial terms</p>
+            <p class="text-xs text-slate-500">Comprehensive intake evaluation, next of kin &amp; psychiatric history</p>
           </div>
         </div>
         <button id="close-modal-x" class="p-1 rounded-lg text-slate-400 hover:bg-slate-100">
@@ -275,7 +272,7 @@ class PatientsView {
         </button>
       </div>
 
-      <form id="add-patient-form" class="space-y-5 text-xs max-h-[78vh] overflow-y-auto pr-1">
+      <form id="add-patient-form" class="space-y-5 text-xs">
         
         <!-- Photo and Primary Info -->
         <div class="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
@@ -325,22 +322,11 @@ class PatientsView {
               <input type="text" id="new-phone" placeholder="+1 (555) 000-0000" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
             </div>
             <div>
-              <label class="block font-semibold text-slate-600 mb-1">Allocated Bed &amp; Room *</label>
-              ${availableBeds.length > 0 ? `
-                <select id="new-bed-select" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-medium text-slate-800 focus:border-teal-500">
-                  ${availableBeds.map(b => `<option value="${b.id}" data-room="${b.roomNumber}" data-bed="${b.bedNumber}">${b.roomNumber} &bull; ${b.bedNumber} (${b.type}, ${b.floor})</option>`).join('')}
-                </select>
-                <input type="hidden" id="new-room" value="${availableBeds[0].roomNumber}">
-                <input type="hidden" id="new-bed" value="${availableBeds[0].bedNumber}">
-              ` : `
-                <div class="space-y-1">
-                  <div class="grid grid-cols-2 gap-1.5">
-                    <input type="text" id="new-room" placeholder="Room 101" class="w-full px-2 py-2 rounded-lg border border-slate-200">
-                    <input type="text" id="new-bed" placeholder="Bed A" class="w-full px-2 py-2 rounded-lg border border-slate-200">
-                  </div>
-                  <span class="text-[10px] text-amber-600 block">No pre-configured beds available. Manual input active.</span>
-                </div>
-              `}
+              <label class="block font-semibold text-slate-600 mb-1">Assigned Room &amp; Bed</label>
+              <div class="grid grid-cols-2 gap-1.5">
+                <input type="text" id="new-room" placeholder="Room 105" class="w-full px-2 py-2 rounded-lg border border-slate-200">
+                <input type="text" id="new-bed" placeholder="Bed A" class="w-full px-2 py-2 rounded-lg border border-slate-200">
+              </div>
             </div>
           </div>
         </div>
@@ -399,78 +385,6 @@ class PatientsView {
           </div>
         </div>
 
-        <!-- 4. Admission Fees & Installment Plan -->
-        <div class="pt-3 border-t border-slate-200 space-y-3">
-          <div class="flex items-center justify-between">
-            <h4 class="font-bold text-slate-800 uppercase tracking-wider text-[11px] text-teal-800 flex items-center gap-1.5">
-              <i data-lucide="credit-card" class="w-3.5 h-3.5 text-teal-600"></i>
-              <span>4. Addict Admission &amp; Recovery Program Fees (Installment Plan)</span>
-            </h4>
-            <span class="text-[10px] text-slate-400 font-mono">Currency: <strong>${currency}</strong></span>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label class="block font-semibold text-slate-600 mb-1">Total Program Fee (${currency}) *</label>
-              <input type="number" id="new-fee-total" min="0" step="10000" value="1500000" required class="w-full px-3 py-2 rounded-lg border border-slate-200 font-bold text-slate-800 focus:border-teal-500">
-            </div>
-
-            <div>
-              <label class="block font-semibold text-slate-600 mb-1">Payment Plan Option *</label>
-              <select id="new-fee-plan" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 font-bold text-teal-800">
-                <option value="Installments" selected>Pay in Installments (Flexible Schedule)</option>
-                <option value="Full Payment">Full Payment (100% Upfront)</option>
-              </select>
-            </div>
-
-            <div id="fee-count-wrapper">
-              <label class="block font-semibold text-slate-600 mb-1">Number of Installments</label>
-              <select id="new-fee-installments" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 font-mono">
-                <option value="2">2 Installments</option>
-                <option value="3" selected>3 Installments</option>
-                <option value="4">4 Installments</option>
-                <option value="6">6 Installments</option>
-                <option value="12">12 Installments</option>
-              </select>
-            </div>
-          </div>
-
-          <div id="installment-fields-row" class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label class="block font-semibold text-slate-600 mb-1">Installment Frequency</label>
-              <select id="new-fee-frequency" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
-                <option value="Monthly" selected>Monthly (Every 30 Days)</option>
-                <option value="Bi-weekly">Bi-weekly (Every 14 Days)</option>
-                <option value="Weekly">Weekly (Every 7 Days)</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block font-semibold text-slate-600 mb-1">Initial Deposit Paid Today (${currency})</label>
-              <input type="number" id="new-fee-deposit" min="0" step="10000" value="500000" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-bold text-emerald-700 focus:border-teal-500">
-            </div>
-
-            <div>
-              <label class="block font-semibold text-slate-600 mb-1">Payment Method</label>
-              <select id="new-fee-method" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
-                <option value="Cash" selected>Cash Payment</option>
-                <option value="Mobile Money">Mobile Money (M-Pesa / Tigo / Airtel)</option>
-                <option value="Bank Transfer">Bank Wire / Transfer</option>
-                <option value="Card">Credit / Debit Card</option>
-                <option value="Sponsor">Sponsor / Family Guarantor</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Intake Receipt / Transaction Reference (Optional)</label>
-            <input type="text" id="new-fee-ref" placeholder="E.g., MPESA-TX-84920 or REC-1029" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono text-[11px]">
-          </div>
-
-          <!-- Dynamic Live Installment Preview -->
-          <div id="new-fee-preview" class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs"></div>
-        </div>
-
         <!-- Form Submit Actions -->
         <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
           <button type="button" id="cancel-add-patient-btn" class="px-5 py-2.5 rounded-xl btn-decor-secondary font-semibold">
@@ -486,99 +400,6 @@ class PatientsView {
     `;
 
     window.AppModal.showCustom(html, 'max-w-2xl');
-
-    // Bed selection change sync
-    const bedSelect = document.getElementById('new-bed-select');
-    if (bedSelect) {
-      bedSelect.onchange = () => {
-        const selected = bedSelect.options[bedSelect.selectedIndex];
-        if (selected && selected.value) {
-          document.getElementById('new-room').value = selected.getAttribute('data-room');
-          document.getElementById('new-bed').value = selected.getAttribute('data-bed');
-        }
-      };
-      if (bedSelect.options.length > 0 && bedSelect.selectedIndex >= 0) {
-        const initSel = bedSelect.options[bedSelect.selectedIndex];
-        document.getElementById('new-room').value = initSel.getAttribute('data-room');
-        document.getElementById('new-bed').value = initSel.getAttribute('data-bed');
-      }
-    }
-
-    // Dynamic calculation preview for installment payments
-    const updateInstallmentPreview = () => {
-      const total = Number(document.getElementById('new-fee-total')?.value) || 0;
-      const plan = document.getElementById('new-fee-plan')?.value || 'Installments';
-      const count = parseInt(document.getElementById('new-fee-installments')?.value) || 1;
-      const freq = document.getElementById('new-fee-frequency')?.value || 'Monthly';
-      const deposit = Number(document.getElementById('new-fee-deposit')?.value) || 0;
-      const countWrapper = document.getElementById('fee-count-wrapper');
-      const fieldsRow = document.getElementById('installment-fields-row');
-      const preview = document.getElementById('new-fee-preview');
-
-      if (!preview) return;
-
-      if (plan === 'Full Payment') {
-        if (countWrapper) countWrapper.style.display = 'none';
-        if (fieldsRow) fieldsRow.style.display = 'none';
-        preview.innerHTML = `
-          <div class="flex items-center justify-between text-slate-700">
-            <span>Payment Plan: <strong class="text-teal-800">100% Full Upfront Payment</strong></span>
-            <span class="font-mono font-bold text-sm text-slate-900">${total.toLocaleString()} ${currency}</span>
-          </div>
-          <p class="text-[11px] text-slate-500">The total admission fee will be settled in full upon registration.</p>
-        `;
-        return;
-      }
-
-      if (countWrapper) countWrapper.style.display = 'block';
-      if (fieldsRow) fieldsRow.style.display = 'grid';
-
-      const remaining = Math.max(0, total - deposit);
-      const remCount = Math.max(1, count - 1);
-      const split = Math.round(remaining / remCount);
-
-      let scheduleHtml = `
-        <div class="flex items-center justify-between text-slate-700 pb-2 border-b border-slate-200">
-          <div>
-            <span class="font-bold text-slate-800">Installment Plan Breakdown:</span>
-            <span class="text-slate-500 font-semibold"> ${count} Installments (${freq})</span>
-          </div>
-          <div class="text-right">
-            <span class="text-slate-500 text-[10px]">Remaining Balance:</span>
-            <strong class="font-mono text-rose-700 text-xs ml-1">${remaining.toLocaleString()} ${currency}</strong>
-          </div>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
-          <div class="p-2 rounded-lg bg-emerald-50 border border-emerald-200">
-            <span class="text-[10px] text-emerald-800 uppercase font-bold block">Installment 1 (Intake)</span>
-            <strong class="font-mono text-emerald-900 text-xs">${deposit.toLocaleString()} ${currency}</strong>
-            <span class="text-[9px] text-emerald-700 block mt-0.5">Paid Today</span>
-          </div>
-      `;
-
-      for (let i = 1; i <= remCount; i++) {
-        const amt = (i === remCount) ? (remaining - (split * (remCount - 1))) : split;
-        const days = i * (freq === 'Weekly' ? 7 : (freq === 'Bi-weekly' ? 14 : 30));
-        scheduleHtml += `
-          <div class="p-2 rounded-lg bg-white border border-slate-200">
-            <span class="text-[10px] text-slate-500 uppercase font-bold block">Installment ${i + 1} (${freq})</span>
-            <strong class="font-mono text-slate-800 text-xs">${Math.max(0, amt).toLocaleString()} ${currency}</strong>
-            <span class="text-[9px] text-slate-400 block mt-0.5">Due in ${days} days</span>
-          </div>
-        `;
-      }
-      scheduleHtml += `</div>`;
-      preview.innerHTML = scheduleHtml;
-    };
-
-    ['new-fee-total', 'new-fee-plan', 'new-fee-installments', 'new-fee-frequency', 'new-fee-deposit'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.oninput = updateInstallmentPreview;
-        el.onchange = updateInstallmentPreview;
-      }
-    });
-    updateInstallmentPreview();
 
     // Handle photo preview change
     const photoInput = document.getElementById('new-photo');
@@ -600,19 +421,6 @@ class PatientsView {
 
       const dob = document.getElementById('new-dob').value;
       const age = new Date().getFullYear() - new Date(dob).getFullYear();
-      const bedSel = document.getElementById('new-bed-select');
-      const selectedBedId = bedSel ? bedSel.value : null;
-
-      const feeData = {
-        totalFee: Number(document.getElementById('new-fee-total')?.value) || 0,
-        currency: currency,
-        paymentPlan: document.getElementById('new-fee-plan')?.value || 'Installments',
-        totalInstallments: parseInt(document.getElementById('new-fee-installments')?.value) || 1,
-        frequency: document.getElementById('new-fee-frequency')?.value || 'Monthly',
-        initialDeposit: Number(document.getElementById('new-fee-deposit')?.value) || 0,
-        paymentMethod: document.getElementById('new-fee-method')?.value || 'Cash',
-        referenceNo: document.getElementById('new-fee-ref')?.value.trim() || ''
-      };
 
       const newPatientData = {
         name: document.getElementById('new-name').value.trim(),
@@ -623,10 +431,8 @@ class PatientsView {
         phone: document.getElementById('new-phone').value.trim(),
         email: `${document.getElementById('new-name').value.toLowerCase().replace(/\s+/g, '.')}@example.com`,
         photo: document.getElementById('new-photo').value || defaultPhoto,
-        bedId: selectedBedId,
         roomNumber: document.getElementById('new-room').value || 'Room 101',
         bedNumber: document.getElementById('new-bed').value || 'Bed A',
-        feeData: feeData,
         nextOfKin: {
           name: document.getElementById('new-nok-name').value.trim(),
           relationship: document.getElementById('new-nok-rel').value.trim(),
@@ -653,25 +459,24 @@ class PatientsView {
         // Show acceptance success card
         window.AppModal.showAcceptanceCard({
           title: 'Resident Admitted Successfully',
-          subtitle: `${created.name} is now registered in the medical system`,
-          icon: 'check-circle-2',
-          badgeText: 'ADMISSION COMPLETED',
-          badgeColor: 'badge-medical-emerald',
-          confirmType: 'success',
-          contentHtml: `
-            <div class="p-3 bg-teal-50 rounded-xl text-xs space-y-1">
-              <div>Patient ID: <strong>${created.id}</strong></div>
-              <div>Assigned Bed: <strong>${created.roomNumber} - ${created.bedNumber}</strong></div>
-              <div>Program Fee Plan: <strong>${feeData.paymentPlan} (${feeData.totalFee.toLocaleString()} ${currency})</strong></div>
-              <div>Deposit Paid Today: <strong class="text-emerald-800">${feeData.initialDeposit.toLocaleString()} ${currency}</strong></div>
-            </div>
-          `,
-          confirmText: 'View Clinical Profile',
-          cancelText: 'Done',
-          onConfirm: () => {
-            this.openPatientDetailsModal(created.id);
-          }
-        });
+        subtitle: `${created.name} is now registered in the medical system`,
+        icon: 'check-circle-2',
+        badgeText: 'ADMISSION COMPLETED',
+        badgeColor: 'badge-medical-emerald',
+        confirmType: 'success',
+        contentHtml: `
+          <div class="p-3 bg-teal-50 rounded-xl text-xs space-y-1">
+            <div>Patient ID: <strong>${created.id}</strong></div>
+            <div>Assigned Bed: <strong>${created.roomNumber} - ${created.bedNumber}</strong></div>
+            <div>Primary Substance: <strong>${created.psychiatricHistory.primarySubstance}</strong></div>
+          </div>
+        `,
+        confirmText: 'View Clinical Profile',
+        cancelText: 'Done',
+        onConfirm: () => {
+          this.openPatientDetailsModal(created.id);
+        }
+      });
       } catch (err) {
         if (submitBtn) {
           submitBtn.disabled = false;
@@ -680,14 +485,12 @@ class PatientsView {
         window.AppModal.close();
       }
     };
-
-    if (window.lucide) window.lucide.createIcons();
   }
 
   /**
    * Complete interactive clinical dossier modal for a resident
    */
-  openPatientDetailsModal(patientId, activeTab = 'tab-overview') {
+  openPatientDetailsModal(patientId) {
     const state = window.AppStore.getState();
     const patient = state.patients.find(p => p.id === patientId);
 
@@ -729,20 +532,16 @@ class PatientsView {
       </div>
 
       <!-- Dossier Tabs -->
-      <div class="flex border-b border-slate-200 mb-4 text-xs font-bold overflow-x-auto">
-        <button class="dossier-tab-btn ${activeTab === 'tab-overview' ? 'active border-teal-600 text-teal-700' : 'border-transparent text-slate-500'} px-3.5 py-2 border-b-2 hover:text-slate-800 whitespace-nowrap" data-tab="tab-overview">Overview &amp; Next of Kin</button>
-        <button class="dossier-tab-btn ${activeTab === 'tab-psych' ? 'active border-teal-600 text-teal-700' : 'border-transparent text-slate-500'} px-3.5 py-2 border-b-2 hover:text-slate-800 whitespace-nowrap" data-tab="tab-psych">Psychiatric History</button>
-        <button class="dossier-tab-btn ${activeTab === 'tab-notes' ? 'active border-teal-600 text-teal-700' : 'border-transparent text-slate-500'} px-3.5 py-2 border-b-2 hover:text-slate-800 whitespace-nowrap" data-tab="tab-notes">Progress Notes (${(patient.progressNotes || []).length})</button>
-        <button class="dossier-tab-btn ${activeTab === 'tab-vitals' ? 'active border-teal-600 text-teal-700' : 'border-transparent text-slate-500'} px-3.5 py-2 border-b-2 hover:text-slate-800 whitespace-nowrap" data-tab="tab-vitals">Vitals &amp; Drug Screens</button>
-        <button class="dossier-tab-btn ${activeTab === 'tab-rx' ? 'active border-teal-600 text-teal-700' : 'border-transparent text-slate-500'} px-3.5 py-2 border-b-2 hover:text-slate-800 whitespace-nowrap" data-tab="tab-rx">Prescriptions (${(patient.prescriptions || []).length})</button>
-        <button class="dossier-tab-btn ${activeTab === 'tab-fees' ? 'active border-teal-600 text-teal-700' : 'border-transparent text-slate-500'} px-3.5 py-2 border-b-2 hover:text-slate-800 whitespace-nowrap flex items-center gap-1.5" data-tab="tab-fees">
-          <i data-lucide="receipt" class="w-3.5 h-3.5"></i>
-          <span>Fees &amp; Installments</span>
-        </button>
+      <div class="flex border-b border-slate-200 mb-4 text-xs font-bold">
+        <button class="dossier-tab-btn active px-3.5 py-2 border-b-2 border-teal-600 text-teal-700" data-tab="tab-overview">Overview &amp; Next of Kin</button>
+        <button class="dossier-tab-btn px-3.5 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800" data-tab="tab-psych">Psychiatric History</button>
+        <button class="dossier-tab-btn px-3.5 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800" data-tab="tab-notes">Progress Notes (${(patient.progressNotes || []).length})</button>
+        <button class="dossier-tab-btn px-3.5 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800" data-tab="tab-vitals">Vitals &amp; Drug Screens</button>
+        <button class="dossier-tab-btn px-3.5 py-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800" data-tab="tab-rx">Prescriptions (${(patient.prescriptions || []).length})</button>
       </div>
 
       <!-- Tab 1: Overview -->
-      <div id="tab-overview" class="dossier-tab-content ${activeTab === 'tab-overview' ? '' : 'hidden'} space-y-4 text-xs">
+      <div id="tab-overview" class="dossier-tab-content space-y-4 text-xs">
         <div class="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
           <div><span class="text-slate-400 block">Admission Date:</span> <strong>${patient.admissionDate}</strong></div>
           <div><span class="text-slate-400 block">Blood Group:</span> <strong>${patient.bloodGroup}</strong></div>
@@ -918,14 +717,9 @@ class PatientsView {
           `).join('')}
         </div>
       </div>
-
-      <!-- Tab 6: Resident Admission & Program Fees / Installments -->
-      <div id="tab-fees" class="dossier-tab-content ${activeTab === 'tab-fees' ? '' : 'hidden'} space-y-4 text-xs">
-        ${this.renderFeesTab(patient)}
-      </div>
     `;
 
-    window.AppModal.showCustom(html, 'max-w-4xl');
+    window.AppModal.showCustom(html, 'max-w-3xl');
 
     document.getElementById('modal-close-btn').onclick = () => window.AppModal.close();
     document.getElementById('modal-dossier-pdf-btn').onclick = () => window.AppDocs.openPatientDossier(patient.id);
@@ -1036,50 +830,6 @@ class PatientsView {
         this.confirmDeletePatient(patient.id, true);
       };
     }
-
-    // Fees & Installments Tab actions
-    const recPayTabBtn = document.getElementById('btn-record-payment-tab');
-    if (recPayTabBtn) {
-      recPayTabBtn.onclick = () => {
-        this.openRecordPaymentModal(patient.id);
-      };
-    }
-
-    const printStmtBtn = document.getElementById('btn-print-statement');
-    if (printStmtBtn) {
-      printStmtBtn.onclick = () => {
-        if (window.AppDocs && window.AppDocs.openPaymentStatement) {
-          window.AppDocs.openPaymentStatement(patient.id);
-        } else {
-          window.print();
-        }
-      };
-    }
-
-    const initFeeBtn = document.getElementById('btn-init-fee-schedule');
-    if (initFeeBtn) {
-      initFeeBtn.onclick = () => {
-        this.openConfigureFeeModal(patient.id);
-      };
-    }
-
-    document.querySelectorAll('.btn-pay-installment').forEach(btn => {
-      btn.onclick = () => {
-        const instId = btn.getAttribute('data-inst-id');
-        this.openRecordPaymentModal(patient.id, instId);
-      };
-    });
-
-    document.querySelectorAll('.btn-receipt-installment').forEach(btn => {
-      btn.onclick = () => {
-        const instId = btn.getAttribute('data-inst-id');
-        if (window.AppDocs && window.AppDocs.openPaymentReceipt) {
-          window.AppDocs.openPaymentReceipt(patient.id, instId);
-        } else {
-          window.print();
-        }
-      };
-    });
 
     if (window.lucide) {
       window.lucide.createIcons();
@@ -1335,513 +1085,6 @@ class PatientsView {
         });
       }
     });
-  }
-
-  /**
-   * Renders the Fees & Installments dossier tab
-   */
-  renderFeesTab(patient) {
-    const fee = window.AppStore.getResidentFee(patient.id);
-    const installments = window.AppStore.getInstallmentPayments(patient.id);
-    const state = window.AppStore.getState();
-    const currency = (fee && fee.currency) || (state.facility && state.facility.currency) || 'TZS';
-
-    if (!fee) {
-      return `
-        <div class="p-8 border-2 border-dashed border-slate-200 rounded-2xl text-center bg-slate-50 space-y-3">
-          <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
-            <i data-lucide="receipt" class="w-6 h-6"></i>
-          </div>
-          <div>
-            <h4 class="font-bold text-slate-800 text-sm">No Fee Schedule Configured</h4>
-            <p class="text-xs text-slate-500 max-w-md mx-auto mt-1">
-              This resident does not currently have an active admission fee or installment schedule recorded on file.
-            </p>
-          </div>
-          <button type="button" id="btn-init-fee-schedule" class="px-4 py-2 rounded-xl btn-decor-primary font-bold inline-flex items-center gap-2">
-            <i data-lucide="plus-circle" class="w-4 h-4"></i>
-            <span>Configure Admission Fee &amp; Installments</span>
-          </button>
-        </div>
-      `;
-    }
-
-    const totalFee = Number(fee.total_fee) || 0;
-    const paidAmount = Number(fee.paid_amount) || 0;
-    const remainingBalance = Number(fee.remaining_balance) !== undefined ? Number(fee.remaining_balance) : Math.max(0, totalFee - paidAmount);
-    const pct = totalFee > 0 ? Math.min(100, Math.round((paidAmount / totalFee) * 100)) : 100;
-    const isPaidInFull = remainingBalance <= 0 || fee.status === 'Paid in Full';
-
-    return `
-      <!-- Action Toolbar -->
-      <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-slate-500 font-semibold">Plan:</span>
-          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${fee.payment_plan === 'Full Payment' ? 'bg-teal-100 text-teal-800' : 'bg-blue-100 text-blue-800'}">
-            ${fee.payment_plan} (${fee.total_installments}x ${fee.frequency || 'Monthly'})
-          </span>
-          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isPaidInFull ? 'badge-medical-emerald' : 'badge-medical-amber'}">
-            ${fee.status || (isPaidInFull ? 'Paid in Full' : 'Active')}
-          </span>
-        </div>
-        <div class="flex items-center gap-2">
-          ${!isPaidInFull ? `
-            <button type="button" id="btn-record-payment-tab" class="px-3 py-1.5 rounded-xl btn-decor-primary text-xs font-bold flex items-center gap-1.5 shadow-sm">
-              <i data-lucide="credit-card" class="w-3.5 h-3.5"></i>
-              <span>Record Payment</span>
-            </button>
-          ` : ''}
-          <button type="button" id="btn-print-statement" class="px-3 py-1.5 rounded-xl btn-decor-secondary text-xs font-bold text-slate-700 flex items-center gap-1.5">
-            <i data-lucide="printer" class="w-3.5 h-3.5"></i>
-            <span>Financial Statement</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Financial KPI Summary Cards -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="p-3 bg-white border border-slate-200 rounded-xl">
-          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Total Program Fee</span>
-          <strong class="text-sm font-mono text-slate-900">${totalFee.toLocaleString()} ${currency}</strong>
-          <span class="text-[10px] text-slate-500 block mt-0.5">Agreed admission rate</span>
-        </div>
-
-        <div class="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl">
-          <span class="text-[10px] uppercase font-bold text-emerald-700 block mb-0.5">Total Collected</span>
-          <strong class="text-sm font-mono text-emerald-800">${paidAmount.toLocaleString()} ${currency}</strong>
-          <span class="text-[10px] text-emerald-600 block mt-0.5">${pct}% Settled</span>
-        </div>
-
-        <div class="p-3 ${remainingBalance > 0 ? 'bg-rose-50/60 border border-rose-200' : 'bg-slate-50 border border-slate-200'} rounded-xl">
-          <span class="text-[10px] uppercase font-bold ${remainingBalance > 0 ? 'text-rose-700' : 'text-slate-400'} block mb-0.5">Remaining Balance</span>
-          <strong class="text-sm font-mono ${remainingBalance > 0 ? 'text-rose-800' : 'text-slate-600'}">${remainingBalance.toLocaleString()} ${currency}</strong>
-          <span class="text-[10px] ${remainingBalance > 0 ? 'text-rose-600' : 'text-slate-400'} block mt-0.5">${remainingBalance > 0 ? 'Due across installments' : 'Account cleared'}</span>
-        </div>
-
-        <div class="p-3 bg-white border border-slate-200 rounded-xl">
-          <span class="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">Installment Count</span>
-          <strong class="text-sm font-bold text-slate-800">${installments.filter(i => i.status === 'Paid').length} / ${installments.length} Completed</strong>
-          <span class="text-[10px] text-slate-500 block mt-0.5">${fee.frequency || 'Monthly'} cycle</span>
-        </div>
-      </div>
-
-      <!-- Payment Settlement Progress Bar -->
-      <div class="p-3 bg-white border border-slate-200 rounded-xl space-y-1.5">
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-bold text-slate-700">Payment Completion Progress</span>
-          <span class="font-mono font-bold ${pct === 100 ? 'text-emerald-700' : 'text-teal-700'}">${pct}% Settled (${paidAmount.toLocaleString()} / ${totalFee.toLocaleString()} ${currency})</span>
-        </div>
-        <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-          <div class="h-full ${pct === 100 ? 'bg-emerald-500' : 'bg-teal-600'} rounded-full transition-all duration-300" style="width: ${pct}%"></div>
-        </div>
-      </div>
-
-      <!-- Installments Schedule Table -->
-      <div class="border border-slate-200 rounded-xl overflow-hidden bg-white">
-        <div class="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <h4 class="font-bold text-slate-800 text-xs">Installment Breakdown &amp; Scheduled Ledger</h4>
-          <span class="text-[11px] text-slate-500">${installments.length} scheduled payments</span>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr class="border-b border-slate-200 bg-slate-50/50 text-[10px] text-slate-500 uppercase font-semibold">
-                <th class="py-2.5 px-3">Inst #</th>
-                <th class="py-2.5 px-3">Due Date</th>
-                <th class="py-2.5 px-3">Amount Due</th>
-                <th class="py-2.5 px-3">Amount Paid</th>
-                <th class="py-2.5 px-3">Status</th>
-                <th class="py-2.5 px-3">Paid Date &amp; Ref</th>
-                <th class="py-2.5 px-3">Method</th>
-                <th class="py-2.5 px-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              ${installments.map(inst => {
-                const isPaid = inst.status === 'Paid';
-                const isPartial = inst.status === 'Partial';
-                const isOverdue = inst.status === 'Overdue';
-                const badgeClass = isPaid ? 'badge-medical-emerald' : (isPartial ? 'badge-medical-amber' : (isOverdue ? 'badge-medical-rose' : 'bg-slate-100 text-slate-600 border border-slate-200'));
-
-                return `
-                  <tr class="hover:bg-slate-50/60 transition-colors">
-                    <td class="py-2.5 px-3 font-bold text-slate-800">
-                      ${inst.installment_number === 1 ? '1 (Deposit)' : `#${inst.installment_number}`}
-                    </td>
-                    <td class="py-2.5 px-3 font-mono text-slate-600">
-                      ${inst.due_date || 'N/A'}
-                    </td>
-                    <td class="py-2.5 px-3 font-mono font-semibold text-slate-900">
-                      ${Number(inst.amount_due).toLocaleString()} ${currency}
-                    </td>
-                    <td class="py-2.5 px-3 font-mono font-bold ${isPaid ? 'text-emerald-700' : (inst.amount_paid > 0 ? 'text-amber-700' : 'text-slate-400')}">
-                      ${Number(inst.amount_paid || 0).toLocaleString()} ${currency}
-                    </td>
-                    <td class="py-2.5 px-3">
-                      <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${badgeClass}">
-                        ${inst.status}
-                      </span>
-                    </td>
-                    <td class="py-2.5 px-3">
-                      ${inst.payment_date ? `
-                        <div class="font-mono text-[11px] text-slate-800">${inst.payment_date}</div>
-                        ${inst.reference_no ? `<div class="font-mono text-[10px] text-slate-400 truncate max-w-[120px]">${inst.reference_no}</div>` : ''}
-                      ` : '<span class="text-slate-400 italic text-[11px]">Unpaid</span>'}
-                    </td>
-                    <td class="py-2.5 px-3 text-slate-600 font-medium">
-                      ${inst.payment_method || '-'}
-                    </td>
-                    <td class="py-2.5 px-3 text-right">
-                      <div class="flex items-center justify-end gap-1.5">
-                        ${!isPaid ? `
-                          <button type="button" class="btn-pay-installment px-2.5 py-1 rounded-lg btn-decor-primary text-[11px] font-bold flex items-center gap-1 shadow-sm" data-inst-id="${inst.id}">
-                            <i data-lucide="wallet" class="w-3 h-3"></i>
-                            <span>Pay</span>
-                          </button>
-                        ` : `
-                          <button type="button" class="btn-receipt-installment px-2.5 py-1 rounded-lg btn-decor-secondary text-[11px] font-bold text-slate-600 hover:text-teal-700 flex items-center gap-1" data-inst-id="${inst.id}">
-                            <i data-lucide="receipt" class="w-3 h-3"></i>
-                            <span>Receipt</span>
-                          </button>
-                        `}
-                      </div>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  }
-
-  /**
-   * Opens modal to record payment for an installment or outstanding balance
-   */
-  openRecordPaymentModal(patientId, targetInstallmentId = null) {
-    const state = window.AppStore.getState();
-    const patient = state.patients.find(p => p.id === patientId);
-    if (!patient) return;
-
-    const fee = window.AppStore.getResidentFee(patientId);
-    const installments = window.AppStore.getInstallmentPayments(patientId);
-    if (!fee) return;
-
-    const currency = fee.currency || 'TZS';
-    let targetInst = targetInstallmentId ? installments.find(i => i.id === targetInstallmentId) : null;
-    if (!targetInst) {
-      targetInst = installments.find(i => i.status !== 'Paid') || installments[installments.length - 1];
-    }
-
-    const defaultAmount = targetInst ? Math.max(0, (targetInst.amount_due - (targetInst.amount_paid || 0))) : fee.remaining_balance;
-    const today = new Date().toISOString().split('T')[0];
-
-    const html = `
-      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-200">
-        <div class="flex items-center gap-2.5">
-          <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center">
-            <i data-lucide="credit-card" class="w-5 h-5"></i>
-          </div>
-          <div>
-            <h3 class="text-base font-bold text-slate-900">Record Installment Payment</h3>
-            <p class="text-xs text-slate-500">${patient.name} (${patient.id}) &bull; Remaining: <strong class="text-rose-700 font-mono">${fee.remaining_balance.toLocaleString()} ${currency}</strong></p>
-          </div>
-        </div>
-        <button id="close-record-pay-btn" class="p-1 rounded-lg text-slate-400 hover:bg-slate-100">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-
-      <form id="record-payment-form" class="space-y-4 text-xs">
-        <div>
-          <label class="block font-semibold text-slate-600 mb-1">Target Installment</label>
-          <select id="record-pay-inst-id" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-semibold focus:border-teal-500">
-            ${installments.map(inst => `
-              <option value="${inst.id}" ${targetInst && targetInst.id === inst.id ? 'selected' : ''}>
-                Installment #${inst.installment_number} (Due: ${Number(inst.amount_due).toLocaleString()} ${currency}, Paid: ${Number(inst.amount_paid||0).toLocaleString()} ${currency} - ${inst.status})
-              </option>
-            `).join('')}
-          </select>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Payment Amount (${currency}) *</label>
-            <input type="number" id="record-pay-amount" min="1" step="1000" value="${defaultAmount}" required class="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono font-bold text-sm text-emerald-800 focus:border-teal-500">
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Payment Date</label>
-            <input type="date" id="record-pay-date" value="${today}" required class="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono focus:border-teal-500">
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Payment Method *</label>
-            <select id="record-pay-method" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
-              <option value="Cash" selected>Cash Payment</option>
-              <option value="Mobile Money">Mobile Money (M-Pesa / Tigo / Airtel)</option>
-              <option value="Bank Transfer">Bank Wire / Transfer</option>
-              <option value="Card">Credit / Debit Card</option>
-              <option value="Sponsor">Sponsor / Family Guarantor</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Reference / Receipt / Transaction #</label>
-            <input type="text" id="record-pay-ref" placeholder="E.g. MPESA-Q88219" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono text-[11px] focus:border-teal-500">
-          </div>
-        </div>
-
-        <div>
-          <label class="block font-semibold text-slate-600 mb-1">Payment Notes (Optional)</label>
-          <input type="text" id="record-pay-notes" placeholder="E.g. Handed over by patient sister, 2nd installment settlement" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
-        </div>
-
-        <div class="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
-          <button type="button" id="cancel-record-pay-btn" class="px-4 py-2 rounded-xl btn-decor-secondary font-semibold">
-            Cancel
-          </button>
-          <button type="submit" class="px-5 py-2 rounded-xl btn-decor-primary font-bold flex items-center gap-1.5 shadow-sm">
-            <i data-lucide="check" class="w-4 h-4"></i>
-            <span>Confirm &amp; Record Payment</span>
-          </button>
-        </div>
-      </form>
-    `;
-
-    window.AppModal.showCustom(html, 'max-w-lg');
-
-    document.getElementById('close-record-pay-btn').onclick = () => {
-      window.AppModal.close();
-      this.openPatientDetailsModal(patientId, 'tab-fees');
-    };
-    document.getElementById('cancel-record-pay-btn').onclick = () => {
-      window.AppModal.close();
-      this.openPatientDetailsModal(patientId, 'tab-fees');
-    };
-
-    const instSelect = document.getElementById('record-pay-inst-id');
-    instSelect.onchange = () => {
-      const chosen = installments.find(i => i.id === instSelect.value);
-      if (chosen) {
-        const rem = Math.max(0, chosen.amount_due - (chosen.amount_paid || 0));
-        document.getElementById('record-pay-amount').value = rem || chosen.amount_due;
-      }
-    };
-
-    document.getElementById('record-payment-form').onsubmit = async (e) => {
-      e.preventDefault();
-      const submitBtn = e.target.querySelector('button[type="submit"]');
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Recording...';
-      }
-
-      const amt = Number(document.getElementById('record-pay-amount').value) || 0;
-      const paymentDate = document.getElementById('record-pay-date').value || today;
-      const paymentMethod = document.getElementById('record-pay-method').value;
-      const referenceNo = document.getElementById('record-pay-ref').value.trim();
-      const notes = document.getElementById('record-pay-notes').value.trim();
-      const selectedInstId = instSelect.value;
-
-      try {
-        await window.AppStore.recordInstallmentPayment({
-          residentId: patientId,
-          installmentId: selectedInstId,
-          amount: amt,
-          paymentDate,
-          paymentMethod,
-          referenceNo,
-          notes
-        });
-
-        window.AppModal.close();
-        window.AppModal.showAcceptanceCard({
-          title: 'Payment Recorded Successfully',
-          subtitle: `${amt.toLocaleString()} ${currency} recorded for ${patient.name}`,
-          icon: 'check-circle-2',
-          badgeText: 'INSTALLMENT SETTLED',
-          badgeColor: 'badge-medical-emerald',
-          confirmType: 'success',
-          confirmText: 'View Statement & Receipt',
-          cancelText: 'Done',
-          onConfirm: () => {
-            this.openPatientDetailsModal(patientId, 'tab-fees');
-          }
-        });
-      } catch (err) {
-        alert('Failed to record payment: ' + (err.message || err));
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = 'Confirm & Record Payment';
-        }
-      }
-    };
-
-    if (window.lucide) window.lucide.createIcons();
-  }
-
-  /**
-   * Opens modal to configure fee schedule for a resident without one
-   */
-  openConfigureFeeModal(patientId) {
-    const state = window.AppStore.getState();
-    const patient = state.patients.find(p => p.id === patientId);
-    if (!patient) return;
-    const currency = (state.facility && state.facility.currency) || 'TZS';
-
-    const html = `
-      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-200">
-        <div class="flex items-center gap-2.5">
-          <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center">
-            <i data-lucide="receipt" class="w-5 h-5"></i>
-          </div>
-          <div>
-            <h3 class="text-base font-bold text-slate-900">Configure Admission Fee Schedule</h3>
-            <p class="text-xs text-slate-500">${patient.name} (${patient.id})</p>
-          </div>
-        </div>
-        <button id="close-config-fee-btn" class="p-1 rounded-lg text-slate-400 hover:bg-slate-100">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-
-      <form id="config-fee-form" class="space-y-4 text-xs">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Total Recovery Fee (${currency}) *</label>
-            <input type="number" id="cfg-fee-total" min="0" step="50000" value="1500000" required class="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono font-bold text-sm text-slate-900 focus:border-teal-500">
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Payment Plan *</label>
-            <select id="cfg-fee-plan" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 font-semibold">
-              <option value="Installments" selected>Installment Plan (Split)</option>
-              <option value="Full Payment">Full Payment Upfront</option>
-            </select>
-          </div>
-        </div>
-
-        <div id="cfg-installment-row" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Number of Installments</label>
-            <select id="cfg-fee-installments" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
-              <option value="2">2 Installments</option>
-              <option value="3" selected>3 Installments</option>
-              <option value="4">4 Installments</option>
-              <option value="6">6 Installments</option>
-              <option value="12">12 Installments</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Payment Frequency</label>
-            <select id="cfg-fee-frequency" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
-              <option value="Monthly" selected>Monthly Cycle</option>
-              <option value="Bi-weekly">Bi-weekly (Every 2 Weeks)</option>
-              <option value="Weekly">Weekly Cycle</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Initial Deposit Paid (${currency})</label>
-            <input type="number" id="cfg-fee-deposit" min="0" step="10000" value="500000" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-bold text-emerald-700 focus:border-teal-500">
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-600 mb-1">Payment Method</label>
-            <select id="cfg-fee-method" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
-              <option value="Cash" selected>Cash Payment</option>
-              <option value="Mobile Money">Mobile Money (M-Pesa / Tigo / Airtel)</option>
-              <option value="Bank Transfer">Bank Wire / Transfer</option>
-              <option value="Card">Credit / Debit Card</option>
-              <option value="Sponsor">Sponsor / Family Guarantor</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label class="block font-semibold text-slate-600 mb-1">Reference / Receipt Number</label>
-          <input type="text" id="cfg-fee-ref" placeholder="E.g. MPESA-10820 or REC-INIT" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono text-[11px] focus:border-teal-500">
-        </div>
-
-        <div class="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
-          <button type="button" id="cancel-cfg-fee-btn" class="px-4 py-2 rounded-xl btn-decor-secondary font-semibold">
-            Cancel
-          </button>
-          <button type="submit" class="px-5 py-2 rounded-xl btn-decor-primary font-bold flex items-center gap-1.5 shadow-sm">
-            <i data-lucide="check" class="w-4 h-4"></i>
-            <span>Save Fee Schedule</span>
-          </button>
-        </div>
-      </form>
-    `;
-
-    window.AppModal.showCustom(html, 'max-w-md');
-
-    document.getElementById('close-config-fee-btn').onclick = () => {
-      window.AppModal.close();
-      this.openPatientDetailsModal(patientId, 'tab-fees');
-    };
-    document.getElementById('cancel-cfg-fee-btn').onclick = () => {
-      window.AppModal.close();
-      this.openPatientDetailsModal(patientId, 'tab-fees');
-    };
-
-    const planSelect = document.getElementById('cfg-fee-plan');
-    const row = document.getElementById('cfg-installment-row');
-    planSelect.onchange = () => {
-      if (row) row.style.display = planSelect.value === 'Full Payment' ? 'none' : 'grid';
-    };
-
-    document.getElementById('config-fee-form').onsubmit = async (e) => {
-      e.preventDefault();
-      const submitBtn = e.target.querySelector('button[type="submit"]');
-      if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="animate-spin inline-block mr-1">⏳</span> Saving...';
-      }
-
-      const totalFee = Number(document.getElementById('cfg-fee-total').value) || 0;
-      const paymentPlan = planSelect.value;
-      const totalInstallments = paymentPlan === 'Full Payment' ? 1 : (parseInt(document.getElementById('cfg-fee-installments').value) || 1);
-      const frequency = document.getElementById('cfg-fee-frequency').value;
-      const initialDeposit = Number(document.getElementById('cfg-fee-deposit').value) || 0;
-      const paymentMethod = document.getElementById('cfg-fee-method').value;
-      const referenceNo = document.getElementById('cfg-fee-ref').value.trim();
-
-      try {
-        await window.AppStore.addResidentFee({
-          residentId: patientId,
-          residentName: patient.name,
-          totalFee,
-          currency,
-          paymentPlan,
-          totalInstallments,
-          frequency,
-          initialDeposit,
-          paymentMethod,
-          referenceNo
-        });
-
-        window.AppModal.close();
-        this.openPatientDetailsModal(patientId, 'tab-fees');
-      } catch (err) {
-        alert('Failed to configure fee schedule: ' + (err.message || err));
-        if (submitBtn) {
-          submitBtn.disabled = false;
-          submitBtn.innerHTML = 'Save Fee Schedule';
-        }
-      }
-    };
-
-    if (window.lucide) window.lucide.createIcons();
   }
 }
 

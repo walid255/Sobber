@@ -206,11 +206,6 @@
 
           <div class="nav-section-title px-3 pt-4 pb-2 text-[10px] uppercase tracking-wider text-slate-400 font-bold" data-i18n="nav_logistics" data-section="logistics">Facility &amp; Logistics</div>
 
-          <a href="#rooms" data-route="rooms" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
-            <i data-lucide="bed-double" class="w-4 h-4 text-teal-400"></i>
-            <span data-i18n="nav_rooms">Rooms &amp; Beds</span>
-          </a>
-
           <a href="#inventory" data-route="inventory" class="nav-link flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-teal-100 hover:bg-slate-800">
             <i data-lucide="boxes" class="w-4 h-4 text-teal-400"></i>
             <span data-i18n="nav_inventory">Pharmacy &amp; Store</span>
@@ -361,14 +356,14 @@
 
       </header>
 
-      <!-- Cloud Sync Alert Banner (Appears when KV/D1 is offline or disconnected) -->
+      <!-- Cloud Sync Alert Banner (Appears when KV is offline or disconnected) -->
       <div id="cloud-sync-warning-banner" class="hidden bg-gradient-to-r from-amber-600 to-rose-600 text-white px-4 py-2.5 text-xs font-bold flex items-center justify-between shadow-md">
         <div class="flex items-center gap-2">
           <i data-lucide="cloud-off" class="w-4 h-4 shrink-0"></i>
-          <span id="cloud-sync-warning-text">Cloudflare global sync is currently unreachable. Changes are held in memory until connection is restored.</span>
+          <span id="cloud-sync-warning-text">Cloudflare KV is not syncing yet. Changes are stored on this device only.</span>
         </div>
         <button type="button" id="cloud-sync-resolve-btn" class="underline hover:text-amber-100 text-xs font-black ml-4 shrink-0 bg-black/20 hover:bg-black/30 px-3 py-1 rounded-lg transition">
-          Retry Cloud Sync &rarr;
+          Fix Cloud Sync &rarr;
         </button>
       </div>
 
@@ -384,23 +379,22 @@
   </div>
 
   <!-- SPA Javascript Modules Loaded in Strict Order with Cache-Busting -->
-  <script src="js/i18n.js?v=20260905-sobber5"></script>
-  <script src="js/store.js?v=20260905-sobber5"></script>
-  <script src="js/auth.js?v=20260905-sobber5"></script>
-  <script src="js/components/modal.js?v=20260905-sobber5"></script>
-  <script src="js/components/reminders.js?v=20260905-sobber5"></script>
-  <script src="js/components/pdf-generator.js?v=20260905-sobber5"></script>
-  <script src="js/admin.js?v=20260905-sobber5"></script>
-  <script src="js/views/dashboard.js?v=20260905-sobber5"></script>
-  <script src="js/views/patients.js?v=20260905-sobber5"></script>
-  <script src="js/views/medications.js?v=20260905-sobber5"></script>
-  <script src="js/views/inventory.js?v=20260905-sobber5"></script>
-  <script src="js/views/rooms.js?v=20260905-sobber5"></script>
-  <script src="js/views/timetable.js?v=20260905-sobber5"></script>
-  <script src="js/views/certificates.js?v=20260905-sobber5"></script>
-  <script src="js/views/batch-upload.js?v=20260905-sobber5"></script>
-  <script src="js/views/users.js?v=20260905-sobber5"></script>
-  <script src="js/views/settings.js?v=20260905-sobber5"></script>
-  <script src="js/app.js?v=20260905-sobber5"></script>
+  <script src="js/i18n.js?v=20260906-sobber5"></script>
+  <script src="js/store.js?v=20260906-sobber5"></script>
+  <script src="js/auth.js?v=20260906-sobber5"></script>
+  <script src="js/components/modal.js?v=20260906-sobber5"></script>
+  <script src="js/components/reminders.js?v=20260906-sobber5"></script>
+  <script src="js/components/pdf-generator.js?v=20260906-sobber5"></script>
+  <script src="js/admin.js?v=20260906-sobber5"></script>
+  <script src="js/views/dashboard.js?v=20260906-sobber5"></script>
+  <script src="js/views/patients.js?v=20260906-sobber5"></script>
+  <script src="js/views/medications.js?v=20260906-sobber5"></script>
+  <script src="js/views/inventory.js?v=20260906-sobber5"></script>
+  <script src="js/views/timetable.js?v=20260906-sobber5"></script>
+  <script src="js/views/certificates.js?v=20260906-sobber5"></script>
+  <script src="js/views/batch-upload.js?v=20260906-sobber5"></script>
+  <script src="js/views/users.js?v=20260906-sobber5"></script>
+  <script src="js/views/settings.js?v=20260906-sobber5"></script>
+  <script src="js/app.js?v=20260906-sobber5"></script>
 </body>
 </html>

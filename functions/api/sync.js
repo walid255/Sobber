@@ -2,10 +2,15 @@
  * Cloudflare Pages Function: /api/sync
  * 
  * Synchronizes global SerenityCare Sober House application state
- * (residents/patients, rooms, beds, addict payment fees & installments,
- * staff/users, medication logs/MAR, inventory, house timetable,
- * reminders, and facility configuration) across all connected browsers
- * via Cloudflare Workers KV and optional D1 SQL Relational Database.
+ * (residents/patients, staff/users, medication logs/MAR, inventory,
+ * house timetable, reminders, and facility configuration) across all
+ * connected browsers via Cloudflare Workers KV.
+ * 
+ * Enforces strong edge-cache bypassing with strict headers:
+ * - Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0
+ * - Surrogate-Control: no-store
+ * - CDN-Cache-Control: no-store
+ * - Cloudflare-CDN-Cache-Control: no-store
  */
 
 const CORS_HEADERS = {
@@ -26,28 +31,7 @@ const JSON_HEADERS = {
   'Cloudflare-CDN-Cache-Control': 'no-store'
 };
 
-const SEED_ROOMS = [
-  { id: 'rm_101', roomNumber: 'Room 101', name: 'Cedar Wing 101', floor: '1st Floor', type: 'Double', capacity: 2, status: 'Active', notes: 'Standard double occupancy recovery room' },
-  { id: 'rm_102', roomNumber: 'Room 102', name: 'Cedar Wing 102', floor: '1st Floor', type: 'Double', capacity: 2, status: 'Active', notes: 'Standard double occupancy recovery room' },
-  { id: 'rm_103', roomNumber: 'Room 103', name: 'Pine Wing 103', floor: '1st Floor', type: 'Single', capacity: 1, status: 'Active', notes: 'Private single transition room' },
-  { id: 'rm_201', roomNumber: 'Room 201', name: 'Maple Hall 201', floor: '2nd Floor', type: 'Ward', capacity: 4, status: 'Active', notes: 'Four-bed group recovery unit' },
-  { id: 'rm_dx1', roomNumber: 'Detox 01', name: 'Clinical Detox Suite 01', floor: 'Ground Floor', type: 'Detox', capacity: 2, status: 'Active', notes: 'Monitored medical detoxification suite' }
-];
-
-const SEED_BEDS = [
-  { id: 'bed_101a', roomId: 'rm_101', bedNumber: 'Bed 101-A', type: 'Standard', status: 'Available', patientId: null, notes: '' },
-  { id: 'bed_101b', roomId: 'rm_101', bedNumber: 'Bed 101-B', type: 'Standard', status: 'Available', patientId: null, notes: '' },
-  { id: 'bed_102a', roomId: 'rm_102', bedNumber: 'Bed 102-A', type: 'Standard', status: 'Available', patientId: null, notes: '' },
-  { id: 'bed_102b', roomId: 'rm_102', bedNumber: 'Bed 102-B', type: 'Standard', status: 'Available', patientId: null, notes: '' },
-  { id: 'bed_103a', roomId: 'rm_103', bedNumber: 'Bed 103-A', type: 'Standard', status: 'Available', patientId: null, notes: '' },
-  { id: 'bed_201a', roomId: 'rm_201', bedNumber: 'Bed 201-A', type: 'Standard', status: 'Available', patientId: null, notes: '' },
-  { id: 'bed_201b', roomId: 'rm_201', bedNumber: 'Bed 201-B', type: 'Standard', status: 'Available', patientId: null, notes: '' },
-  { id: 'bed_201c', roomId: 'rm_201', bedNumber: 'Bed 201-C', type: 'Standard', status: 'Available', patientId: null, notes: '' },
-  { id: 'bed_201d', roomId: 'rm_201', bedNumber: 'Bed 201-D', type: 'Standard', status: 'Available', patientId: null, notes: '' },
-  { id: 'bed_dx1a', roomId: 'rm_dx1', bedNumber: 'Bed DX-1', type: 'Medical', status: 'Available', patientId: null, notes: 'Direct vitals telemetry equipped' },
-  { id: 'bed_dx1b', roomId: 'rm_dx1', bedNumber: 'Bed DX-2', type: 'Medical', status: 'Available', patientId: null, notes: 'Direct vitals telemetry equipped' }
-];
-
+// Initial clean production state seeded automatically if KV namespace is brand new
 const SEED_SOBBER_STATE = {
   facility: {
     name: 'SerenityCare Sober House & Recovery Center',
@@ -57,7 +41,7 @@ const SEED_SOBBER_STATE = {
     email: 'admissions@serenitycare.org',
     director: 'Dr. Evelyn Vance, MD, FASAM',
     leadCounselor: 'Marcus Sterling, MSW, LCDC',
-    totalBeds: 11,
+    totalBeds: 32,
     currency: 'TZS',
     logoUrl: 'assets/logo.svg',
     faviconUrl: 'assets/favicon.svg'
@@ -79,7 +63,6 @@ const SEED_SOBBER_STATE = {
       permissions: {
         dashboard: true,
         patients: true,
-        rooms: true,
         medications: true,
         timetable: true,
         inventory: true,
@@ -90,11 +73,7 @@ const SEED_SOBBER_STATE = {
       }
     }
   ],
-  rooms: SEED_ROOMS,
-  beds: SEED_BEDS,
   patients: [],
-  residentFees: [],
-  installmentPayments: [],
   medicationLogs: [],
   inventory: [],
   inventoryTransactions: [],
@@ -114,10 +93,12 @@ const SEED_SOBBER_STATE = {
 
 function getKV(context) {
   if (context.env?.SOBBER_KV) return context.env.SOBBER_KV;
+  if (context.env?.MY_KV_NAMESPACE) return context.env.MY_KV_NAMESPACE;
   if (context.env?.KV) return context.env.KV;
   if (context.env?.SOBER_KV) return context.env.SOBER_KV;
   if (context.env?.SERENITYCARE_KV) return context.env.SERENITYCARE_KV;
   
+  // Auto-discover any bound KV namespace in context.env
   if (context.env && typeof context.env === 'object') {
     for (const key of Object.keys(context.env)) {
       const val = context.env[key];
@@ -129,8 +110,19 @@ function getKV(context) {
   return null;
 }
 
+function isAuthorized(context) {
+  const secret = context.env?.ADMIN_SECRET || context.env?.AUTH_SECRET || context.env?.SOBBER_ADMIN_SECRET;
+  if (!secret) return true; // Optional if not configured
+  const authHeader = context.request.headers.get('Authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  return token === secret.trim();
+}
+
 export async function onRequestOptions() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS
+  });
 }
 
 export async function onRequestGet(context) {
@@ -140,7 +132,7 @@ export async function onRequestGet(context) {
       return new Response(JSON.stringify({ 
         online: false,
         isDemoFallback: true,
-        message: 'Cloudflare KV binding not detected. Bind SOBBER_KV in Cloudflare Pages Settings -> Functions.',
+        message: 'Cloudflare KV binding not detected. In Cloudflare Pages, go to Settings -> Functions -> KV namespace bindings and bind SOBBER_KV.',
         ...SEED_SOBBER_STATE
       }), {
         status: 200,
@@ -148,6 +140,7 @@ export async function onRequestGet(context) {
       });
     }
 
+    // Direct primary read bypassing any intermediate KV caching
     let rawData = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
     if (!rawData) {
       rawData = await kv.get('serenitycare_state', { type: 'text', cacheTtl: 0 });
@@ -161,8 +154,6 @@ export async function onRequestGet(context) {
       };
       await kv.put('sobber_state', JSON.stringify(initialWithTimestamp));
       await kv.put('sobber_users', JSON.stringify(initialWithTimestamp.users));
-      await kv.put('sobber_rooms', JSON.stringify(initialWithTimestamp.rooms));
-      await kv.put('sobber_beds', JSON.stringify(initialWithTimestamp.beds));
 
       return new Response(JSON.stringify(initialWithTimestamp), {
         status: 200,
@@ -176,14 +167,6 @@ export async function onRequestGet(context) {
     } catch {
       parsed = SEED_SOBBER_STATE;
     }
-
-    // Ensure rooms, beds, residentFees, installmentPayments exist
-    if (!Array.isArray(parsed.rooms) || parsed.rooms.length === 0) {
-      parsed.rooms = SEED_ROOMS;
-      parsed.beds = SEED_BEDS;
-    }
-    if (!Array.isArray(parsed.residentFees)) parsed.residentFees = [];
-    if (!Array.isArray(parsed.installmentPayments)) parsed.installmentPayments = [];
 
     return new Response(JSON.stringify(parsed || {}), {
       status: 200,
@@ -202,6 +185,16 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   try {
+    if (!isAuthorized(context)) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Unauthorized: Invalid or missing Bearer token in Authorization header' 
+      }), {
+        status: 401,
+        headers: JSON_HEADERS
+      });
+    }
+
     const kv = getKV(context);
     if (!kv) {
       return new Response(JSON.stringify({ 
@@ -240,55 +233,27 @@ export async function onRequestPost(context) {
     stateToSave.lastSyncedAt = new Date().toISOString();
     stateToSave.stateVersion = Date.now();
 
-    if (!Array.isArray(stateToSave.rooms)) stateToSave.rooms = SEED_ROOMS;
-    if (!Array.isArray(stateToSave.beds)) stateToSave.beds = SEED_BEDS;
-    if (!Array.isArray(stateToSave.residentFees)) stateToSave.residentFees = [];
-    if (!Array.isArray(stateToSave.installmentPayments)) stateToSave.installmentPayments = [];
-
     // Persist full system snapshot to primary KV storage
     await kv.put('sobber_state', JSON.stringify(stateToSave));
 
     // Mirror granular collections for dedicated endpoints
-    if (Array.isArray(stateToSave.users)) await kv.put('sobber_users', JSON.stringify(stateToSave.users));
-    if (Array.isArray(stateToSave.patients)) await kv.put('sobber_patients', JSON.stringify(stateToSave.patients));
-    if (Array.isArray(stateToSave.rooms)) await kv.put('sobber_rooms', JSON.stringify(stateToSave.rooms));
-    if (Array.isArray(stateToSave.beds)) await kv.put('sobber_beds', JSON.stringify(stateToSave.beds));
-    if (Array.isArray(stateToSave.residentFees)) await kv.put('sobber_fees', JSON.stringify(stateToSave.residentFees));
-    if (Array.isArray(stateToSave.installmentPayments)) await kv.put('sobber_installments', JSON.stringify(stateToSave.installmentPayments));
-    if (Array.isArray(stateToSave.medicationLogs)) await kv.put('sobber_medications', JSON.stringify(stateToSave.medicationLogs));
-    if (Array.isArray(stateToSave.inventory)) await kv.put('sobber_inventory', JSON.stringify(stateToSave.inventory));
-    if (Array.isArray(stateToSave.timetable)) await kv.put('sobber_timetable', JSON.stringify(stateToSave.timetable));
-
-    // D1 SQL Relational Sync if connected
-    if (context.env?.DB) {
-      try {
-        if (Array.isArray(stateToSave.rooms)) {
-          for (const rm of stateToSave.rooms) {
-            await context.env.DB.prepare(
-              `INSERT INTO rooms (id, room_number, name, floor, type, capacity, status, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET
-               room_number=excluded.room_number, name=excluded.name, floor=excluded.floor,
-               type=excluded.type, capacity=excluded.capacity, status=excluded.status, notes=excluded.notes`
-            ).bind(rm.id, rm.roomNumber, rm.name || '', rm.floor || '1st Floor', rm.type || 'Double', rm.capacity || 2, rm.status || 'Active', rm.notes || '').run().catch(() => {});
-          }
-        }
-        if (Array.isArray(stateToSave.beds)) {
-          for (const bd of stateToSave.beds) {
-            await context.env.DB.prepare(
-              `INSERT INTO beds (id, room_id, bed_number, type, status, patient_id, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET
-               room_id=excluded.room_id, bed_number=excluded.bed_number, type=excluded.type,
-               status=excluded.status, patient_id=excluded.patient_id, notes=excluded.notes`
-            ).bind(bd.id, bd.roomId, bd.bedNumber, bd.type || 'Standard', bd.status || 'Available', bd.patientId || null, bd.notes || '').run().catch(() => {});
-          }
-        }
-      } catch (e) {
-        console.warn('Pages D1 sync error:', e);
-      }
+    if (Array.isArray(stateToSave.users)) {
+      await kv.put('sobber_users', JSON.stringify(stateToSave.users));
+    }
+    if (Array.isArray(stateToSave.patients)) {
+      await kv.put('sobber_patients', JSON.stringify(stateToSave.patients));
+    }
+    if (Array.isArray(stateToSave.medicationLogs)) {
+      await kv.put('sobber_medications', JSON.stringify(stateToSave.medicationLogs));
+    }
+    if (Array.isArray(stateToSave.inventory)) {
+      await kv.put('sobber_inventory', JSON.stringify(stateToSave.inventory));
+    }
+    if (Array.isArray(stateToSave.timetable)) {
+      await kv.put('sobber_timetable', JSON.stringify(stateToSave.timetable));
     }
 
+    // Read-Your-Writes confirmation pattern: Return the canonical state with fresh version
     return new Response(JSON.stringify({
       success: true,
       message: 'SerenityCare Sober House state successfully written to Cloudflare Workers KV',
@@ -296,8 +261,6 @@ export async function onRequestPost(context) {
       version: stateToSave.stateVersion,
       usersCount: stateToSave.users?.length || 0,
       patientsCount: stateToSave.patients?.length || 0,
-      roomsCount: stateToSave.rooms?.length || 0,
-      bedsCount: stateToSave.beds?.length || 0,
       state: stateToSave
     }), {
       status: 200,

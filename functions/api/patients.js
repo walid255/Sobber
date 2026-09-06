@@ -25,6 +25,7 @@ const JSON_HEADERS = {
 
 function getKV(context) {
   if (context.env?.SOBBER_KV) return context.env.SOBBER_KV;
+  if (context.env?.MY_KV_NAMESPACE) return context.env.MY_KV_NAMESPACE;
   if (context.env?.KV) return context.env.KV;
   if (context.env?.SOBER_KV) return context.env.SOBER_KV;
   if (context.env?.SERENITYCARE_KV) return context.env.SERENITYCARE_KV;
@@ -38,6 +39,14 @@ function getKV(context) {
     }
   }
   return null;
+}
+
+function isAuthorized(context) {
+  const secret = context.env?.ADMIN_SECRET || context.env?.AUTH_SECRET || context.env?.SOBBER_ADMIN_SECRET;
+  if (!secret) return true;
+  const authHeader = context.request.headers.get('Authorization') || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+  return token === secret.trim();
 }
 
 export async function onRequestOptions() {
@@ -83,6 +92,16 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   try {
+    if (!isAuthorized(context)) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Unauthorized: Invalid or missing Bearer token in Authorization header' 
+      }), { 
+        status: 401, 
+        headers: JSON_HEADERS 
+      });
+    }
+
     const kv = getKV(context);
     if (!kv) {
       return new Response(JSON.stringify({ success: false, error: 'KV namespace not bound' }), { 
@@ -176,31 +195,6 @@ export async function onRequestPost(context) {
 
     await kv.put('sobber_patients', JSON.stringify(currentList));
 
-    // Synchronize bed allocation if bedId or bedNumber provided
-    let beds = [];
-    const bRaw = await kv.get('sobber_beds', { type: 'text', cacheTtl: 0 });
-    if (bRaw) {
-      try {
-        beds = JSON.parse(bRaw);
-        let changed = false;
-        beds.forEach(b => {
-          if (b.patientId === patientItem.id && b.id !== patientItem.bedId && b.bedNumber !== patientItem.bedNumber) {
-            b.status = 'Available';
-            b.patientId = null;
-            changed = true;
-          }
-          if ((patientItem.bedId && b.id === patientItem.bedId) || (patientItem.bedNumber && b.bedNumber === patientItem.bedNumber)) {
-            b.status = 'Occupied';
-            b.patientId = patientItem.id;
-            changed = true;
-          }
-        });
-        if (changed) {
-          await kv.put('sobber_beds', JSON.stringify(beds));
-        }
-      } catch {}
-    }
-
     // Update in sobber_state
     const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
     let stateObj = null;
@@ -208,7 +202,6 @@ export async function onRequestPost(context) {
       try {
         stateObj = JSON.parse(stateRaw);
         stateObj.patients = currentList;
-        if (beds.length > 0) stateObj.beds = beds;
         stateObj.lastSyncedAt = new Date().toISOString();
         stateObj.stateVersion = Date.now();
         await kv.put('sobber_state', JSON.stringify(stateObj));
@@ -236,6 +229,16 @@ export async function onRequestPost(context) {
 
 export async function onRequestDelete(context) {
   try {
+    if (!isAuthorized(context)) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Unauthorized: Invalid or missing Bearer token in Authorization header' 
+      }), { 
+        status: 401, 
+        headers: JSON_HEADERS 
+      });
+    }
+
     const kv = getKV(context);
     if (!kv) {
       return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: JSON_HEADERS });
@@ -267,33 +270,12 @@ export async function onRequestDelete(context) {
 
     await kv.put('sobber_patients', JSON.stringify(list));
 
-    // Release any bed allocated to this resident
-    let beds = [];
-    const bRaw = await kv.get('sobber_beds', { type: 'text', cacheTtl: 0 });
-    if (bRaw) {
-      try {
-        beds = JSON.parse(bRaw);
-        let bedChanged = false;
-        beds.forEach(b => {
-          if (b.patientId === patientId) {
-            b.status = 'Available';
-            b.patientId = null;
-            bedChanged = true;
-          }
-        });
-        if (bedChanged) {
-          await kv.put('sobber_beds', JSON.stringify(beds));
-        }
-      } catch {}
-    }
-
     // Update sobber_state
     const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
     if (stateRaw) {
       try {
         const stateObj = JSON.parse(stateRaw);
         stateObj.patients = list;
-        if (beds.length > 0) stateObj.beds = beds;
         if (Array.isArray(stateObj.medicationLogs)) {
           stateObj.medicationLogs = stateObj.medicationLogs.filter(m => m.patientId !== patientId);
           await kv.put('sobber_medications', JSON.stringify(stateObj.medicationLogs));
