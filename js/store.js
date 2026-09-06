@@ -44,7 +44,8 @@ const INITIAL_STATE = {
         certificates: true,
         batch_upload: true,
         users: true,
-        settings: true
+        settings: true,
+        payments: true
       }
     }
   ],
@@ -53,6 +54,7 @@ const INITIAL_STATE = {
   inventory: [],
   inventoryTransactions: [],
   timetable: [],
+  payments: [],
   reminders: [],
   activityLogs: [
     {
@@ -140,7 +142,17 @@ class ReactiveStore {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return { ...INITIAL_STATE, ...parsed };
+        const merged = { ...INITIAL_STATE, ...parsed };
+        if (!Array.isArray(merged.payments)) merged.payments = [];
+        // Ensure admin user always retains payments permission
+        if (Array.isArray(merged.users)) {
+          const admin = merged.users.find(u => u.role === 'admin');
+          if (admin) {
+            admin.permissions = admin.permissions || {};
+            if (typeof admin.permissions.payments === 'undefined') admin.permissions.payments = true;
+          }
+        }
+        return merged;
       }
     } catch (e) {
       console.warn('Could not load from localStorage, initializing defaults:', e);
@@ -242,6 +254,7 @@ class ReactiveStore {
     if (remoteState.inventory) this.state.inventory = remoteState.inventory;
     if (remoteState.inventoryTransactions) this.state.inventoryTransactions = remoteState.inventoryTransactions;
     if (remoteState.timetable) this.state.timetable = remoteState.timetable;
+    if (remoteState.payments) this.state.payments = remoteState.payments;
     if (remoteState.reminders) this.state.reminders = remoteState.reminders;
     if (remoteState.facility) {
       this.state.facility = { ...this.state.facility, ...remoteState.facility };
@@ -1033,6 +1046,251 @@ class ReactiveStore {
           'Pragma': 'no-cache'
         }),
         body: JSON.stringify(this.state.timetable)
+      });
+  // --- BILLING & PAYMENTS ACTIONS (TZS) ---
+
+  formatCurrency(amount) {
+    return `${Number(amount || 0).toLocaleString()} TZS`;
+  }
+
+  getPayments() {
+    return Array.isArray(this.state.payments) ? this.state.payments : [];
+  }
+
+  getPaymentById(paymentId) {
+    return this.getPayments().find(p => p.id === paymentId) || null;
+  }
+
+  getPaymentsByPatientId(patientId) {
+    return this.getPayments().filter(p => p.patientId === patientId);
+  }
+
+  calculatePaymentStatus(totalAmount, amountPaid, dueDate) {
+    const total = Number(totalAmount) || 0;
+    const paid = Number(amountPaid) || 0;
+    if (paid >= total && total > 0) return 'Paid';
+    if (paid > 0 && paid < total) return 'Partial';
+    if (dueDate) {
+      const due = new Date(dueDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (due < today) return 'Overdue';
+    }
+    return 'Pending';
+  }
+
+  async addPayment(paymentData) {
+    const currentList = this.getPayments();
+    const count = currentList.length + 1;
+    const newId = 'PAY-' + (1000 + count);
+    const now = new Date();
+    const invoiceNo = `INV-${now.getFullYear()}-${String(count).padStart(4, '0')}`;
+    const dateStr = paymentData.date || now.toISOString().split('T')[0];
+    const dueStr = paymentData.dueDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+    const total = Math.max(0, Number(paymentData.totalAmount) || 0);
+    const paid = Math.max(0, Number(paymentData.amountPaid) || 0);
+    const balance = Math.max(0, total - paid);
+    const status = paymentData.status || this.calculatePaymentStatus(total, paid, dueStr);
+
+    const initialInstallments = [];
+    if (paid > 0) {
+      initialInstallments.push({
+        id: 'INST-' + newId + '-1',
+        date: dateStr,
+        amount: paid,
+        paymentMethod: paymentData.paymentMethod || 'Cash',
+        referenceNo: paymentData.referenceNo || 'INITIAL-' + Date.now().toString().slice(-6),
+        recordedBy: this.state.currentUser ? this.state.currentUser.name : 'Clinical Staff',
+        notes: paymentData.notes || 'Initial Payment / Deposit'
+      });
+    }
+
+    const newPayment = {
+      id: newId,
+      invoiceNumber: invoiceNo,
+      patientId: paymentData.patientId || null,
+      patientName: paymentData.patientName || 'General Facility Fee',
+      category: paymentData.category || 'Admission Fee',
+      description: paymentData.description || 'Facility service and care charge',
+      totalAmount: total,
+      amountPaid: paid,
+      balance: balance,
+      status: status,
+      paymentMethod: paymentData.paymentMethod || 'M-Pesa',
+      referenceNo: paymentData.referenceNo || '',
+      payerName: paymentData.payerName || '',
+      payerPhone: paymentData.payerPhone || '',
+      date: dateStr,
+      dueDate: dueStr,
+      recordedBy: this.state.currentUser ? this.state.currentUser.name : 'Clinical Staff',
+      notes: paymentData.notes || '',
+      installments: initialInstallments,
+      ...paymentData,
+      id: newId,
+      invoiceNumber: invoiceNo,
+      totalAmount: total,
+      amountPaid: paid,
+      balance: balance,
+      status: status,
+      installments: initialInstallments
+    };
+
+    try {
+      await fetch(this.getApiUrl('/api/payments'), {
+        method: 'POST',
+        headers: this.getAuthHeaders({
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        }),
+        body: JSON.stringify(newPayment)
+      });
+    } catch (e) {
+      console.warn('Direct /api/payments write failed, proceeding with local reactive mutation:', e);
+    }
+
+    await this.mutate(s => {
+      if (!Array.isArray(s.payments)) s.payments = [];
+      s.payments.unshift(newPayment);
+      s.activityLogs.unshift({
+        id: 'act_' + Date.now(),
+        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        user: s.currentUser ? s.currentUser.name : 'Staff',
+        action: 'Recorded Payment / Invoice',
+        details: `${newPayment.invoiceNumber}: ${newPayment.patientName} (${this.formatCurrency(newPayment.totalAmount)}) via ${newPayment.paymentMethod}`
+      });
+    }, 'payment:added', newPayment);
+
+    return newPayment;
+  }
+
+  async recordPaymentInstallment(paymentId, installmentData) {
+    let updatedPayment = null;
+    const amount = Math.max(0, Number(installmentData.amount) || 0);
+
+    await this.mutate(s => {
+      if (!Array.isArray(s.payments)) s.payments = [];
+      const idx = s.payments.findIndex(p => p.id === paymentId);
+      if (idx !== -1) {
+        const p = s.payments[idx];
+        const newPaid = p.amountPaid + amount;
+        const newBalance = Math.max(0, p.totalAmount - newPaid);
+        const newStatus = this.calculatePaymentStatus(p.totalAmount, newPaid, p.dueDate);
+        const instList = Array.isArray(p.installments) ? [...p.installments] : [];
+
+        const newInstallment = {
+          id: 'INST-' + p.id + '-' + (instList.length + 1),
+          date: installmentData.date || new Date().toISOString().split('T')[0],
+          amount: amount,
+          paymentMethod: installmentData.paymentMethod || p.paymentMethod || 'M-Pesa',
+          referenceNo: installmentData.referenceNo || '',
+          recordedBy: s.currentUser ? s.currentUser.name : 'Staff',
+          notes: installmentData.notes || ''
+        };
+        instList.push(newInstallment);
+
+        s.payments[idx] = {
+          ...p,
+          amountPaid: newPaid,
+          balance: newBalance,
+          status: newStatus,
+          paymentMethod: installmentData.paymentMethod || p.paymentMethod,
+          referenceNo: installmentData.referenceNo || p.referenceNo,
+          installments: instList
+        };
+        updatedPayment = s.payments[idx];
+
+        s.activityLogs.unshift({
+          id: 'act_' + Date.now(),
+          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          user: s.currentUser ? s.currentUser.name : 'Staff',
+          action: 'Recorded Payment Installment',
+          details: `${p.invoiceNumber}: ${p.patientName} +${this.formatCurrency(amount)} via ${installmentData.paymentMethod || p.paymentMethod}`
+        });
+      }
+    }, 'payment:installment_added', { paymentId, installmentData });
+
+    if (updatedPayment) {
+      try {
+        await fetch(this.getApiUrl('/api/payments'), {
+          method: 'POST',
+          headers: this.getAuthHeaders({
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-store, no-cache',
+            'Pragma': 'no-cache'
+          }),
+          body: JSON.stringify(updatedPayment)
+        });
+      } catch (e) {}
+    }
+
+    return updatedPayment;
+  }
+
+  async updatePayment(paymentId, updates) {
+    let updated = null;
+    await this.mutate(s => {
+      if (!Array.isArray(s.payments)) s.payments = [];
+      const idx = s.payments.findIndex(p => p.id === paymentId);
+      if (idx !== -1) {
+        const merged = { ...s.payments[idx], ...updates };
+        const total = Math.max(0, Number(merged.totalAmount) || 0);
+        const paid = Math.max(0, Number(merged.amountPaid) || 0);
+        merged.totalAmount = total;
+        merged.amountPaid = paid;
+        merged.balance = Math.max(0, total - paid);
+        merged.status = updates.status || this.calculatePaymentStatus(total, paid, merged.dueDate);
+        s.payments[idx] = merged;
+        updated = merged;
+      }
+    }, 'payment:updated', { paymentId, updates });
+
+    if (updated) {
+      try {
+        await fetch(this.getApiUrl('/api/payments'), {
+          method: 'POST',
+          headers: this.getAuthHeaders({
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Cache-Control': 'no-store, no-cache',
+            'Pragma': 'no-cache'
+          }),
+          body: JSON.stringify(updated)
+        });
+      } catch (e) {}
+    }
+    return updated;
+  }
+
+  async deletePayment(paymentId) {
+    let deletedPayment = null;
+    await this.mutate(s => {
+      if (!Array.isArray(s.payments)) s.payments = [];
+      deletedPayment = s.payments.find(p => p.id === paymentId);
+      s.payments = s.payments.filter(p => p.id !== paymentId);
+
+      if (deletedPayment) {
+        s.activityLogs.unshift({
+          id: 'act_' + Date.now(),
+          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          user: s.currentUser ? s.currentUser.name : 'Admin',
+          action: 'Deleted Payment Record',
+          details: `Invoice ${deletedPayment.invoiceNumber} (${deletedPayment.patientName} - ${this.formatCurrency(deletedPayment.totalAmount)}) removed`
+        });
+      }
+    }, 'payment:deleted', paymentId);
+
+    try {
+      await fetch(this.getApiUrl(`/api/payments?id=${encodeURIComponent(paymentId)}`), {
+        method: 'DELETE',
+        headers: this.getAuthHeaders({
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Cache-Control': 'no-store, no-cache',
+          'Pragma': 'no-cache'
+        })
       });
     } catch (e) {}
     return true;
