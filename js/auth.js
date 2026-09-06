@@ -19,7 +19,8 @@ const ROLE_PERMISSIONS = {
     canManageInventory: true,
     canManageTimetable: true,
     canBatchImport: true,
-    canViewAudits: true
+    canViewAudits: true,
+    canManagePayments: true
   },
   doctor: {
     title: 'Addiction Psychiatrist / MD',
@@ -121,7 +122,7 @@ class AuthService {
   }
 
   getAllowedRoutes() {
-    const allRoutes = ['dashboard', 'patients', 'medications', 'timetable', 'inventory', 'certificates', 'batch-upload', 'users', 'settings'];
+    const allRoutes = ['dashboard', 'patients', 'medications', 'timetable', 'inventory', 'certificates', 'batch-upload', 'payments', 'users', 'settings'];
     return allRoutes.filter(r => this.hasPermission(r));
   }
 

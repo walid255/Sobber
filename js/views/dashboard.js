@@ -18,6 +18,11 @@ class DashboardView {
     const lowStockItems = state.inventory.filter(i => i.quantity <= i.minThreshold);
     const qualifiedCandidates = patients.filter(p => p.graduationQualified && p.stage !== 'Graduated');
 
+    const canPayments = window.Auth.hasPermission('payments');
+    const payments = window.AppStore.getPayments();
+    const totalRev = payments.reduce((s, p) => s + (Number(p.amountPaid) || 0), 0);
+    const totalDues = payments.reduce((s, p) => s + (Number(p.balance) || 0), 0);
+
     const occupancyPct = Math.min(100, Math.round((activePatients.length / facility.totalBeds) * 100));
 
     container.innerHTML = `
@@ -133,6 +138,43 @@ class DashboardView {
           </div>
 
         </div>
+
+        <!-- Financial Overview KPI Banner (TZS) -->
+        ${canPayments ? `
+          <div class="medical-card p-5 bg-gradient-to-r from-slate-900 via-teal-950 to-slate-900 text-white rounded-2xl shadow-sm border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 flex items-center justify-center shrink-0">
+                <i data-lucide="receipt" class="w-6 h-6"></i>
+              </div>
+              <div>
+                <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider mb-1">
+                  <span>Revenue &amp; Collections Ledger (TZS)</span>
+                </div>
+                <h3 class="text-base font-extrabold text-white">Facility Financial Overview &bull; SerenityCare</h3>
+                <p class="text-xs text-slate-400">Total collected revenue and outstanding resident dues across all billing accounts</p>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-6 divide-y md:divide-y-0 md:divide-x divide-slate-800 w-full md:w-auto justify-between md:justify-end">
+              <div class="pt-2 md:pt-0 text-left">
+                <span class="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">Total Revenue Collected</span>
+                <div class="text-xl font-black text-emerald-400 font-mono mt-0.5">${Number(totalRev).toLocaleString()} <span class="text-xs font-normal text-slate-400">TZS</span></div>
+              </div>
+
+              <div class="pt-2 md:pt-0 md:pl-6 text-left">
+                <span class="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">Outstanding Dues</span>
+                <div class="text-xl font-black ${totalDues > 0 ? 'text-amber-400' : 'text-slate-200'} font-mono mt-0.5">${Number(totalDues).toLocaleString()} <span class="text-xs font-normal text-slate-400">TZS</span></div>
+              </div>
+
+              <div class="pt-2 md:pt-0 md:pl-6">
+                <button onclick="window.AppRouter.navigate('payments')" class="px-4 py-2 rounded-xl btn-decor-primary text-xs font-bold flex items-center gap-1.5 shadow-md">
+                  <span>View Billing Suite</span>
+                  <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        ` : ''}
 
         <!-- Charts & Analytics Section -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

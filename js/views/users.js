@@ -222,6 +222,7 @@ class UsersView {
       { key: 'inventory', label: 'Pharmacy & Store', desc: 'Facility stock, supplies, audits, and dispensing' },
       { key: 'certificates', label: 'Graduation & Release', desc: 'Sober milestones & official certificate issuance' },
       { key: 'batch_upload', label: 'Batch CSV Import', desc: 'Bulk import residents from CSV data' },
+      { key: 'payments', label: 'Billing & Payments', desc: 'Invoices, receipts, M-Pesa/bank collections (TZS)' },
       { key: 'users', label: 'Staff & RBAC', desc: 'User accounts, role assignments, permissions' },
       { key: 'settings', label: 'Facility & Settings', desc: 'Facility branding, licenses, and cloud storage' }
     ];
@@ -281,6 +282,7 @@ class UsersView {
       inventory: user.role === 'admin' || user.role === 'nurse',
       certificates: true,
       batch_upload: user.role === 'admin',
+      payments: user.role === 'admin',
       users: user.role === 'admin',
       settings: user.role === 'admin'
     };
@@ -426,6 +428,7 @@ class UsersView {
       inventory: false,
       certificates: true,
       batch_upload: false,
+      payments: false,
       users: false,
       settings: false
     };
@@ -500,10 +503,10 @@ class UsersView {
       roleSelect.onchange = (e) => {
         const role = e.target.value;
         const roleDefaults = {
-          admin: { dashboard: true, patients: true, medications: true, timetable: true, inventory: true, certificates: true, batch_upload: true, users: true, settings: true },
-          doctor: { dashboard: true, patients: true, medications: true, timetable: true, inventory: false, certificates: true, batch_upload: true, users: false, settings: false },
-          nurse: { dashboard: true, patients: true, medications: true, timetable: false, inventory: true, certificates: false, batch_upload: false, users: false, settings: false },
-          counselor: { dashboard: true, patients: true, medications: false, timetable: true, inventory: false, certificates: true, batch_upload: false, users: false, settings: false }
+          admin: { dashboard: true, patients: true, medications: true, timetable: true, inventory: true, certificates: true, batch_upload: true, payments: true, users: true, settings: true },
+          doctor: { dashboard: true, patients: true, medications: true, timetable: true, inventory: false, certificates: true, batch_upload: true, payments: false, users: false, settings: false },
+          nurse: { dashboard: true, patients: true, medications: true, timetable: false, inventory: true, certificates: false, batch_upload: false, payments: false, users: false, settings: false },
+          counselor: { dashboard: true, patients: true, medications: false, timetable: true, inventory: false, certificates: true, batch_upload: false, payments: false, users: false, settings: false }
         };
         const defaults = roleDefaults[role] || {};
         document.querySelectorAll('.perm-checkbox').forEach(cb => {

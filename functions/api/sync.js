@@ -69,7 +69,8 @@ const SEED_SOBBER_STATE = {
         certificates: true,
         batch_upload: true,
         users: true,
-        settings: true
+        settings: true,
+        payments: true
       }
     }
   ],
@@ -78,6 +79,7 @@ const SEED_SOBBER_STATE = {
   inventory: [],
   inventoryTransactions: [],
   timetable: [],
+  payments: [],
   reminders: [],
   activityLogs: [
     {
@@ -251,6 +253,9 @@ export async function onRequestPost(context) {
     }
     if (Array.isArray(stateToSave.timetable)) {
       await kv.put('sobber_timetable', JSON.stringify(stateToSave.timetable));
+    }
+    if (Array.isArray(stateToSave.payments)) {
+      await kv.put('sobber_payments', JSON.stringify(stateToSave.payments));
     }
 
     // Read-Your-Writes confirmation pattern: Return the canonical state with fresh version

@@ -71,6 +71,7 @@ export default {
             '/api/medications',
             '/api/inventory',
             '/api/timetable',
+            '/api/payments',
             '/api/health'
           ]
         }), { headers: corsHeaders });
@@ -416,7 +417,97 @@ export default {
         }
       }
 
-      // 8. R2 Storage Upload (POST /api/upload)
+      // 8. /api/payments (Billing, Invoices & Installments in TZS)
+      if (path === '/api/payments') {
+        if (method === 'GET') {
+          if (!kv) return new Response(JSON.stringify([]), { headers: corsHeaders });
+          const patientId = url.searchParams.get('patientId');
+          const paymentId = url.searchParams.get('id');
+          let raw = await kv.get('sobber_payments', { type: 'text', cacheTtl: 0 });
+          let list = [];
+          if (raw) {
+            try { list = JSON.parse(raw); } catch {}
+          } else {
+            const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+            if (rawState) {
+              try {
+                const s = JSON.parse(rawState);
+                if (Array.isArray(s.payments)) {
+                  list = s.payments;
+                  await kv.put('sobber_payments', JSON.stringify(list));
+                }
+              } catch {}
+            }
+          }
+          if (!Array.isArray(list)) list = [];
+          if (paymentId) {
+            const p = list.find(item => item.id === paymentId);
+            return new Response(JSON.stringify(p || { error: 'Not found' }), { status: p ? 200 : 404, headers: corsHeaders });
+          }
+          if (patientId) {
+            const filtered = list.filter(item => item.patientId === patientId);
+            return new Response(JSON.stringify(filtered), { headers: corsHeaders });
+          }
+          return new Response(JSON.stringify(list), { headers: corsHeaders });
+        }
+        if (method === 'POST') {
+          if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
+          const payload = await request.json();
+          let list = [];
+          const existing = await kv.get('sobber_payments', { type: 'text', cacheTtl: 0 });
+          if (existing) {
+            try { list = JSON.parse(existing); } catch {}
+          }
+          if (Array.isArray(payload)) {
+            list = payload;
+          } else {
+            const idx = list.findIndex(p => p.id === payload.id || (p.invoiceNumber && p.invoiceNumber === payload.invoiceNumber));
+            if (idx >= 0) list[idx] = { ...list[idx], ...payload };
+            else list.unshift(payload);
+          }
+          await kv.put('sobber_payments', JSON.stringify(list));
+
+          const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+          let version = Date.now();
+          if (rawState) {
+            try {
+              const stateObj = JSON.parse(rawState);
+              stateObj.payments = list;
+              stateObj.lastSyncedAt = new Date().toISOString();
+              stateObj.stateVersion = version;
+              await kv.put('sobber_state', JSON.stringify(stateObj));
+            } catch {}
+          }
+          return new Response(JSON.stringify({ success: true, count: list.length, version }), { headers: corsHeaders });
+        }
+        if (method === 'DELETE') {
+          if (!kv) return new Response(JSON.stringify({ error: 'KV missing' }), { status: 500, headers: corsHeaders });
+          const id = url.searchParams.get('id');
+          if (!id) return new Response(JSON.stringify({ error: 'Missing id parameter' }), { status: 400, headers: corsHeaders });
+          let list = [];
+          const existing = await kv.get('sobber_payments', { type: 'text', cacheTtl: 0 });
+          if (existing) {
+            try { list = JSON.parse(existing); } catch {}
+          }
+          list = list.filter(p => p.id !== id);
+          await kv.put('sobber_payments', JSON.stringify(list));
+
+          const rawState = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+          let version = Date.now();
+          if (rawState) {
+            try {
+              const stateObj = JSON.parse(rawState);
+              stateObj.payments = list;
+              stateObj.lastSyncedAt = new Date().toISOString();
+              stateObj.stateVersion = version;
+              await kv.put('sobber_state', JSON.stringify(stateObj));
+            } catch {}
+          }
+          return new Response(JSON.stringify({ success: true, deletedId: id, version }), { headers: corsHeaders });
+        }
+      }
+
+      // 9. R2 Storage Upload (POST /api/upload)
       if (path === '/api/upload' && method === 'POST') {
         if (!env.BUCKET) {
           return new Response(JSON.stringify({ error: 'R2 bucket not bound' }), { status: 500, headers: corsHeaders });

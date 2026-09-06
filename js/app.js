@@ -13,6 +13,7 @@ class AppRouter {
       timetable: new window.TimetableView(),
       certificates: new window.CertificatesView(),
       'batch-upload': new window.BatchUploadView(),
+      payments: new window.PaymentsView(),
       users: new window.UsersView(),
       settings: new window.SettingsView()
     };
@@ -334,6 +335,7 @@ class AppRouter {
       inventory: 'Pharmacy & Store',
       certificates: 'Graduation & Release',
       'batch-upload': 'Batch CSV Import',
+      payments: 'Billing & Payments',
       users: 'Staff & RBAC',
       settings: 'Facility & Cloudflare'
     };
@@ -446,7 +448,7 @@ class AppRouter {
     // Hide section headers if all children modules in that section are hidden
     const sectionMap = {
       clinical_ops: ['dashboard', 'patients', 'medications', 'timetable'],
-      logistics: ['inventory', 'certificates', 'batch-upload'],
+      logistics: ['inventory', 'certificates', 'batch-upload', 'payments'],
       admin: ['users', 'settings']
     };
 

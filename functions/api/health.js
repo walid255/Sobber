@@ -72,12 +72,14 @@ export async function onRequestGet(context) {
       error: errorDetail
     },
     endpoints: [
+      '/api/content',
       '/api/sync',
       '/api/users',
       '/api/patients',
       '/api/medications',
       '/api/inventory',
       '/api/timetable',
+      '/api/payments',
       '/api/health'
     ]
   }), {

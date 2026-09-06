@@ -467,6 +467,205 @@ class DocumentGenerator {
   }
 
   /**
+   * Generates and previews a branded Payment Receipt & Tax Invoice for printing or PDF export
+   */
+  openPaymentReceipt(paymentId) {
+    const state = this.store.getState();
+    const payment = this.store.getPaymentById(paymentId);
+    const facility = state.facility || {};
+
+    if (!payment) {
+      if (window.AppModal) {
+        window.AppModal.alert('Error', 'Payment record not found.', 'danger');
+      }
+      return;
+    }
+
+    const patient = payment.patientId ? state.patients.find(p => p.id === payment.patientId) : null;
+    const printAreaId = 'payment-receipt-print-area';
+
+    const installments = Array.isArray(payment.installments) && payment.installments.length > 0 
+      ? payment.installments 
+      : [{
+          id: 'INST-1',
+          date: payment.date,
+          amount: payment.amountPaid,
+          paymentMethod: payment.paymentMethod,
+          referenceNo: payment.referenceNo,
+          recordedBy: payment.recordedBy || 'Staff'
+        }];
+
+    const isFullyPaid = payment.status === 'Paid' || payment.balance <= 0;
+
+    const html = `
+      <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+            <i data-lucide="receipt" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-lg font-bold text-slate-900">Official Payment Receipt: ${payment.invoiceNumber}</h3>
+            <p class="text-xs text-slate-500">${payment.patientName} &bull; ${payment.category}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="print-receipt-btn" class="px-4 py-2 rounded-xl text-xs font-bold btn-decor-primary flex items-center gap-1.5 shadow-sm">
+            <i data-lucide="printer" class="w-4 h-4"></i>
+            <span>Print Receipt / PDF</span>
+          </button>
+          <button id="close-receipt-btn" class="px-3 py-2 rounded-xl text-xs font-semibold btn-decor-secondary">
+            Close
+          </button>
+        </div>
+      </div>
+
+      <!-- Printable Receipt Canvas -->
+      <div id="${printAreaId}" class="bg-white p-8 border border-slate-300 rounded-xl text-slate-800 shadow-sm max-h-[75vh] overflow-y-auto">
+        
+        <!-- Header & Branding -->
+        <div class="flex items-start justify-between border-b-2 border-emerald-600 pb-5 mb-6">
+          <div>
+            <h1 class="text-2xl font-black tracking-tight text-slate-900">${facility.name}</h1>
+            <p class="text-xs text-slate-500 font-medium">${facility.address} &bull; Tel: ${facility.phone}</p>
+            <p class="text-xs text-emerald-800 font-mono font-semibold mt-0.5">Clinical Reg License: ${facility.licenseNumber} &bull; Official Fiscal Receipt</p>
+          </div>
+          <div class="text-right">
+            <span class="inline-block px-3 py-1 font-black text-xs rounded-full uppercase tracking-wider mb-1 ${isFullyPaid ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+              ${isFullyPaid ? 'PAID IN FULL (IMELIPWA)' : 'PARTIAL PAYMENT (IMELIPWA KIASI)'}
+            </span>
+            <div class="text-xs font-mono font-bold text-slate-700 mt-1">${payment.invoiceNumber}</div>
+            <div class="text-[11px] text-slate-400">Date: ${payment.date}</div>
+          </div>
+        </div>
+
+        <!-- Meta Grid: Resident & Payer -->
+        <div class="grid grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-200 mb-6 text-xs">
+          <div>
+            <h4 class="font-bold text-slate-400 uppercase text-[10px] tracking-wider mb-1">Billed Resident / Patient</h4>
+            <div class="font-black text-sm text-slate-900">${payment.patientName}</div>
+            ${patient ? `
+              <div class="text-slate-500 font-mono mt-0.5">ID: ${patient.id} &bull; Room: ${patient.roomNumber || 'N/A'} (${patient.bedNumber || 'Bed 1'})</div>
+              <div class="text-slate-500 mt-0.5">Stage: ${patient.stage} &bull; Days Sober: ${patient.sobrietyDays}</div>
+            ` : `<div class="text-slate-500 mt-0.5">General / Direct Facility Client</div>`}
+          </div>
+
+          <div>
+            <h4 class="font-bold text-slate-400 uppercase text-[10px] tracking-wider mb-1">Payer &amp; Transaction Details</h4>
+            <div class="font-bold text-slate-800">${payment.payerName || payment.patientName}</div>
+            <div class="text-slate-500 font-mono mt-0.5">Phone: ${payment.payerPhone || (patient ? patient.phone : 'N/A')}</div>
+            <div class="text-slate-600 font-semibold mt-1 flex items-center gap-1">
+              <span>Channel:</span>
+              <span class="text-emerald-700 font-bold">${payment.paymentMethod}</span>
+              ${payment.referenceNo ? `<span class="text-slate-400 font-mono text-[10px]">(Ref: ${payment.referenceNo})</span>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <!-- Invoiced Services Table -->
+        <div class="mb-6">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] border-b border-slate-200">
+                <th class="py-2.5 px-3">Description of Care / Service</th>
+                <th class="py-2.5 px-3">Billing Category</th>
+                <th class="py-2.5 px-3 text-right">Amount (TZS)</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr>
+                <td class="py-3 px-3">
+                  <div class="font-bold text-slate-900">${payment.category}</div>
+                  <div class="text-[11px] text-slate-500 mt-0.5">${payment.description || 'Residential sober rehabilitation and structured clinical recovery care'}</div>
+                  ${payment.notes ? `<div class="text-[10px] text-slate-400 italic mt-0.5">Note: ${payment.notes}</div>` : ''}
+                </td>
+                <td class="py-3 px-3 font-semibold text-slate-700">${payment.category}</td>
+                <td class="py-3 px-3 text-right font-mono font-bold text-slate-900 text-sm">
+                  ${Number(payment.totalAmount || 0).toLocaleString()} TZS
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Installment Payment History Table -->
+        <div class="mb-6">
+          <h4 class="font-bold text-slate-800 text-xs mb-2 uppercase tracking-wider text-[10px]">Payment Ledger &amp; Installments Received</h4>
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="bg-slate-50 text-slate-500 font-bold uppercase text-[9px] border-b border-slate-200">
+                <th class="py-2 px-3">Date</th>
+                <th class="py-2 px-3">Channel</th>
+                <th class="py-2 px-3">Reference / Slip</th>
+                <th class="py-2 px-3">Received By</th>
+                <th class="py-2 px-3 text-right">Amount Paid (TZS)</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              ${installments.map((inst, idx) => `
+                <tr>
+                  <td class="py-2 px-3 font-mono text-[11px]">${inst.date || payment.date}</td>
+                  <td class="py-2 px-3 font-semibold text-slate-700">${inst.paymentMethod || payment.paymentMethod}</td>
+                  <td class="py-2 px-3 font-mono text-[11px] text-slate-500">${inst.referenceNo || payment.referenceNo || 'CASH-REC'}</td>
+                  <td class="py-2 px-3 text-slate-500">${inst.recordedBy || payment.recordedBy || 'Staff'}</td>
+                  <td class="py-2 px-3 text-right font-mono font-bold text-emerald-700">
+                    +${Number(inst.amount || payment.amountPaid).toLocaleString()} TZS
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Totals Summary Box -->
+        <div class="flex justify-end mb-8">
+          <div class="w-72 space-y-2 text-xs">
+            <div class="flex justify-between py-1 border-b border-slate-100">
+              <span class="text-slate-500">Total Billed:</span>
+              <span class="font-mono font-bold text-slate-800">${Number(payment.totalAmount || 0).toLocaleString()} TZS</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-100">
+              <span class="text-emerald-700 font-bold">Total Paid:</span>
+              <span class="font-mono font-bold text-emerald-700">${Number(payment.amountPaid || 0).toLocaleString()} TZS</span>
+            </div>
+            <div class="flex justify-between py-2 border-t-2 border-slate-300">
+              <span class="font-extrabold text-sm ${payment.balance > 0 ? 'text-amber-700' : 'text-slate-800'}">Outstanding Balance:</span>
+              <span class="font-mono font-black text-sm ${payment.balance > 0 ? 'text-amber-600' : 'text-slate-800'}">${Number(payment.balance || 0).toLocaleString()} TZS</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Signatures & Official Stamp -->
+        <div class="pt-6 border-t-2 border-slate-200 grid grid-cols-2 gap-8 text-xs text-slate-500">
+          <div>
+            <div class="font-bold text-slate-800 mb-1">SerenityCare Authorized Accounting</div>
+            <p class="text-[11px] text-slate-400">All payments are subject to clinical intake terms. Keep this receipt for tax, insurance, or recovery sponsorship verification.</p>
+            <div class="mt-8 pt-2 border-t border-slate-300 w-48 text-center text-[10px] font-bold text-slate-700">
+              Authorizing Officer Signature
+            </div>
+          </div>
+          <div class="text-right flex flex-col items-end justify-between">
+            <div class="border-2 border-emerald-600 text-emerald-800 rounded-xl px-4 py-2 font-black text-xs uppercase tracking-widest inline-block text-center">
+              <div>SERENITYCARE</div>
+              <div class="text-[9px] font-bold">FINANCE VERIFIED</div>
+            </div>
+            <div class="text-[10px] text-slate-400">Printed: ${new Date().toLocaleString()} &bull; System ID: ${payment.id}</div>
+          </div>
+        </div>
+
+      </div>
+    `;
+
+    if (window.AppModal) {
+      window.AppModal.showCustom(html, 'max-w-2xl');
+
+      document.getElementById('close-receipt-btn').onclick = () => window.AppModal.close();
+      document.getElementById('print-receipt-btn').onclick = () => this.printElement(printAreaId, `Receipt-${payment.invoiceNumber}`);
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+
+  /**
    * Helper to print a specific DOM element using a clean print window
    */
   printElement(elementId, title = 'Document') {

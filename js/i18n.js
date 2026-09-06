@@ -15,6 +15,7 @@ const TRANSLATIONS = {
     nav_inventory: 'Pharmacy & Store',
     nav_certificates: 'Graduation & Release',
     nav_batch_upload: 'Batch CSV Import',
+    nav_payments: 'Billing & Payments',
     nav_users: 'Staff & RBAC',
     nav_settings: 'Facility & Cloudflare',
     nav_clinical_ops: 'Clinical Operations',
@@ -120,8 +121,21 @@ const TRANSLATIONS = {
     perm_inventory: 'Pharmacy & Store',
     perm_certificates: 'Graduation & Release',
     perm_batch_upload: 'Batch CSV Import',
+    perm_payments: 'Billing & Payments',
     perm_users: 'Staff & RBAC',
     perm_settings: 'Facility & Settings',
+
+    // Billing & Payments
+    payments_title: 'Billing & Revenue Operations',
+    payments_subtitle: 'Manage resident invoices, M-Pesa/bank collections, payment installments, and official receipts',
+    btn_new_payment: 'Record New Payment',
+    lbl_total_revenue: 'Total Revenue Collected',
+    lbl_outstanding_balance: 'Outstanding Patient Dues',
+    lbl_month_collections: 'Collections This Month',
+    lbl_total_invoices: 'Total Invoices Issued',
+    lbl_receipt: 'Official Receipt',
+    print_receipt: 'Print Receipt / PDF',
+    financials_tab: 'Billing & Financials',
 
     // Common Buttons
     btn_cancel: 'Cancel',
@@ -141,6 +155,7 @@ const TRANSLATIONS = {
     nav_inventory: 'Famasi & Stoo',
     nav_certificates: 'Mahafali & Kuachiliwa',
     nav_batch_upload: 'Ingiza CSV kwa Wingi',
+    nav_payments: 'Malipo & Ankara',
     nav_users: 'Wafanyakazi & Ruhusa',
     nav_settings: 'Kituo & Mipangilio',
     nav_clinical_ops: 'Shughuli za Kliniki',
@@ -166,6 +181,7 @@ const TRANSLATIONS = {
     perm_inventory: 'Famasi & Stoo',
     perm_certificates: 'Mahafali & Kuachiliwa',
     perm_batch_upload: 'Ingiza CSV kwa Wingi',
+    perm_payments: 'Malipo & Ankara',
     perm_users: 'Wafanyakazi & Ruhusa',
     perm_settings: 'Kituo & Mipangilio',
 
@@ -248,6 +264,18 @@ const TRANSLATIONS = {
     edit_staff_member: 'Hariri Mfanyakazi & Ruhusa',
     delete_staff_member: 'Futa Akaunti',
     manage_permissions: 'Weka au Ondoa Ruhusa',
+
+    // Billing & Payments
+    payments_title: 'Uendeshaji wa Malipo na Mapato',
+    payments_subtitle: 'Dhibiti ankara za wakazi, miamala ya M-Pesa/benki, awamu za malipo, na stakabadhi rasmi',
+    btn_new_payment: 'Rekodi Malipo Mapya',
+    lbl_total_revenue: 'Jumla ya Mapato Yaliyokusanywa',
+    lbl_outstanding_balance: 'Madeni Yanayodaiwa',
+    lbl_month_collections: 'Makusanyo ya Mwezi Huu',
+    lbl_total_invoices: 'Jumla ya Ankara Zilizotolewa',
+    lbl_receipt: 'Stakabadhi Rasmi ya Malipo',
+    print_receipt: 'Chapa Risiti / PDF',
+    financials_tab: 'Malipo & Ankara za Mkazi',
 
     // Common Buttons
     btn_cancel: 'Ghairi',
