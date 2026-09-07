@@ -1,0 +1,5 @@
+# Cloudflare Pages SPA Routing Rules
+# Pages Functions in /functions/api are executed automatically.
+# Forward any explicit API routes, and fall back other frontend SPA routes to /index.html.
+/api/*    /api/:splat   200
+/*        /index.html   200

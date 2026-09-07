@@ -1,0 +1,261 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=Cinzel:wght@600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --primary-teal: #0d9488;
+  --primary-teal-dark: #0f766e;
+  --primary-teal-light: #14b8a6;
+  --accent-cyan: #06b6d4;
+  --accent-emerald: #10b981;
+  --medical-slate: #0f172a;
+  --medical-surface: #f8fafc;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: #f1f5f9;
+  color: #1e293b;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Animations */
+@keyframes modalPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(13, 148, 136, 0);
+  }
+}
+
+@keyframes alertPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+  }
+}
+
+.animate-modal-pop {
+  animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s infinite;
+}
+
+.animate-alert-pulse {
+  animation: alertPulse 1.5s infinite;
+}
+
+/* Modal Center Acceptance Card Styling */
+.modal-overlay {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.modal-acceptance-card {
+  box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(226, 232, 240, 0.8);
+  border-radius: 1.25rem;
+  background: #ffffff;
+}
+
+/* Decorated Action Buttons */
+.btn-decor-primary {
+  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px 0 rgba(13, 148, 136, 0.35);
+  transition: all 0.2s ease-in-out;
+}
+.btn-decor-primary:hover {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  box-shadow: 0 6px 20px 0 rgba(13, 148, 136, 0.45);
+  transform: translateY(-1px);
+}
+.btn-decor-primary:active {
+  transform: translateY(0);
+}
+
+.btn-decor-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.35);
+  transition: all 0.2s ease-in-out;
+}
+.btn-decor-success:hover {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  box-shadow: 0 6px 20px 0 rgba(16, 185, 129, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-decor-danger {
+  background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%);
+  color: #ffffff;
+  box-shadow: 0 4px 14px 0 rgba(244, 63, 94, 0.35);
+  transition: all 0.2s ease-in-out;
+}
+.btn-decor-danger:hover {
+  background: linear-gradient(135deg, #fb7185 0%, #f43f5e 100%);
+  box-shadow: 0 6px 20px 0 rgba(244, 63, 94, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-decor-secondary {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  transition: all 0.15s ease-in-out;
+}
+.btn-decor-secondary:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+/* Medical Badges */
+.badge-medical-teal {
+  background-color: #ccfbf1;
+  color: #0f766e;
+  border: 1px solid #99f6e4;
+}
+.badge-medical-emerald {
+  background-color: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.badge-medical-amber {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.badge-medical-rose {
+  background-color: #ffe4e6;
+  color: #9f1239;
+  border: 1px solid #fecdd3;
+}
+.badge-medical-cyan {
+  background-color: #cffafe;
+  color: #155e75;
+  border: 1px solid #a5f3fc;
+}
+
+/* Glassmorphism Card Panels */
+.medical-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s ease;
+}
+.medical-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Certificate Special Fonts & Layout */
+.font-diploma {
+  font-family: 'Cinzel', serif, Georgia, 'Times New Roman';
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 11pt !important;
+  }
+  
+  /* Hide UI chrome during print */
+  #sidebar, #top-nav, .no-print, button, #modal-x-close, #modal-btn-cancel, 
+  #print-dossier-btn, #print-cert-btn, #print-inv-btn, 
+  #close-dossier-btn, #close-cert-btn, #close-inv-btn {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+
+  .modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  .modal-acceptance-card {
+    box-shadow: none !important;
+    border: none !important;
+    max-height: none !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* Force page breaks */
+  .page-break {
+    page-break-after: always;
+    break-after: page;
+  }
+
+  /* Certificate print page settings */
+  @page {
+    margin: 0.5cm;
+    size: auto;
+  }
+
+  .print-certificate-container {
+    width: 100% !important;
+    height: 100% !important;
+    box-shadow: none !important;
+    border: 4px double #0f766e !important;
+  }
+}
+
+.print-only {
+  display: none;
+}
+
+/* Sidebar Collapse & Expand Utilities */
+#sidebar.sidebar-collapsed {
+  transform: translateX(-100%) !important;
+}
+
+#app-shell-main.sidebar-collapsed {
+  padding-left: 0 !important;
+}

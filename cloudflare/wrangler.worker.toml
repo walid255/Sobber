@@ -1,0 +1,21 @@
+# Standalone Cloudflare Worker Configuration
+# Deploy with: wrangler deploy -c cloudflare/wrangler.worker.toml
+name = "serenitycare-api"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+
+# Primary Cloudflare KV Namespace
+# [[kv_namespaces]]
+# binding = "SOBBER_KV"
+# id = "your-actual-kv-namespace-id"
+
+# Cloudflare D1 Relational SQL Database
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "serenitycare-db"
+# database_id = "your-actual-d1-database-id"
+
+# Cloudflare R2 Storage Bucket
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "serenitycare-storage"
