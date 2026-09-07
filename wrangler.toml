@@ -15,13 +15,13 @@ pages_build_output_dir = "."
 # If you prefer to define bindings directly in this file, uncomment and insert your real IDs:
 # [[kv_namespaces]]
 # binding = "SOBBER_KV"
-# id = "your-actual-kv-namespace-id"
+# id = "74d57885730146898c09a729e8d3d66c"
 #
 # [[d1_databases]]
 # binding = "DB"
 # database_name = "serenitycare-db"
-# database_id = "your-actual-d1-database-id"
+# database_id = "1710b076-d09b-462b-bdb1-3ce2d9e73045"
 #
 # [[r2_buckets]]
 # binding = "BUCKET"
-# bucket_name = "serenitycare-storage"
+# bucket_name = "sobber"
