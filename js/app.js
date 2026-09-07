@@ -244,12 +244,16 @@ class AppRouter {
     if (instantAdminBtn) {
       instantAdminBtn.onclick = () => {
         if (errorBox) errorBox.classList.add('hidden');
-        const res = window.Auth.loginAsAdmin();
+        const rememberMe = document.getElementById('remember-me');
+        const remember = Boolean(rememberMe && rememberMe.checked);
+        const res = window.Auth.loginAsAdmin(remember);
         if (res && res.success) {
           if (pwdInput) pwdInput.value = '';
           this.checkAuthAndRender();
         } else {
           if (errorBox && errorText) {
+            errorBox.classList.remove('bg-teal-50', 'border-teal-200', 'text-teal-800');
+            errorBox.classList.add('bg-rose-50', 'border-rose-200', 'text-rose-800');
             errorText.textContent = (res && res.message) || 'Failed to sign in as admin.';
             errorBox.classList.remove('hidden');
           }
@@ -263,10 +267,18 @@ class AppRouter {
         if (errorBox) errorBox.classList.add('hidden');
         const res = window.Auth.resetAdminCredentials();
         if (res && res.success) {
-          if (pwdInput) pwdInput.value = '';
-          this.checkAuthAndRender();
+          if (emailInput) emailInput.value = 'admin@serenitycare.org';
+          if (pwdInput) pwdInput.value = 'Admin@Serenity2026!';
+          if (errorBox && errorText) {
+            errorText.textContent = res.message || 'Credentials reset to default.';
+            errorBox.classList.remove('hidden');
+            errorBox.classList.remove('bg-rose-50', 'border-rose-200', 'text-rose-800');
+            errorBox.classList.add('bg-teal-50', 'border-teal-200', 'text-teal-800');
+          }
         } else {
           if (errorBox && errorText) {
+            errorBox.classList.remove('bg-teal-50', 'border-teal-200', 'text-teal-800');
+            errorBox.classList.add('bg-rose-50', 'border-rose-200', 'text-rose-800');
             errorText.textContent = (res && res.message) || 'Credentials reset failed.';
             errorBox.classList.remove('hidden');
           }
@@ -302,14 +314,18 @@ class AppRouter {
         e.preventDefault();
         const email = emailInput ? emailInput.value.trim() : '';
         const password = pwdInput ? pwdInput.value : '';
+        const rememberMe = document.getElementById('remember-me');
+        const remember = Boolean(rememberMe && rememberMe.checked);
 
-        const res = window.Auth.login(email, password);
+        const res = window.Auth.login(email, password, remember);
         if (res.success) {
           if (errorBox) errorBox.classList.add('hidden');
           if (pwdInput) pwdInput.value = '';
           this.checkAuthAndRender();
         } else {
           if (errorBox && errorText) {
+            errorBox.classList.remove('bg-teal-50', 'border-teal-200', 'text-teal-800');
+            errorBox.classList.add('bg-rose-50', 'border-rose-200', 'text-rose-800');
             errorText.textContent = res.message || 'Invalid email or password.';
             errorBox.classList.remove('hidden');
           }

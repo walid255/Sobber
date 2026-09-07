@@ -130,12 +130,12 @@ class AuthService {
     this.store.setCurrentUser(userId);
   }
 
-  login(email, password) {
-    return this.store.loginUser(email, password);
+  login(email, password, remember = false) {
+    return this.store.loginUser(email, password, remember);
   }
 
-  loginAsAdmin() {
-    return this.store.forceLoginAsAdmin();
+  loginAsAdmin(remember = false) {
+    return this.store.forceLoginAsAdmin(remember);
   }
 
   resetAdminCredentials() {

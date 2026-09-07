@@ -138,11 +138,20 @@ class ReactiveStore {
   }
 
   loadState() {
+    let merged = JSON.parse(JSON.stringify(INITIAL_STATE));
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        const merged = { ...INITIAL_STATE, ...parsed };
+        // Force-clean any legacy session data accidentally persisted in database storage
+        if (parsed && (parsed.currentUser || parsed.sessionToken)) {
+          delete parsed.currentUser;
+          delete parsed.sessionToken;
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          } catch (e) {}
+        }
+        merged = { ...INITIAL_STATE, ...parsed };
         if (!Array.isArray(merged.payments)) merged.payments = [];
         // Ensure admin user always retains payments permission
         if (Array.isArray(merged.users)) {
@@ -152,19 +161,60 @@ class ReactiveStore {
             if (typeof admin.permissions.payments === 'undefined') admin.permissions.payments = true;
           }
         }
-        return merged;
       }
     } catch (e) {
       console.warn('Could not load from localStorage, initializing defaults:', e);
     }
-    this.saveState(INITIAL_STATE, false);
-    return JSON.parse(JSON.stringify(INITIAL_STATE));
+
+    // Default to unauthenticated on every fresh launch / window load
+    merged.currentUser = null;
+    merged.sessionToken = null;
+
+    // 1. Check if there is an active session in sessionStorage (current browser tab refresh)
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        const sessionUserRaw = sessionStorage.getItem('serenitycare_session_user');
+        const sessionToken = sessionStorage.getItem('serenitycare_session_token');
+        if (sessionUserRaw) {
+          const sUser = JSON.parse(sessionUserRaw);
+          const found = (merged.users || []).find(u => u.id === sUser.id || u.email === sUser.email);
+          if (found) {
+            merged.currentUser = { ...found };
+            merged.sessionToken = sessionToken || 'tok_session';
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 2. Check if user explicitly checked "Remember workstation session" in localStorage
+    if (!merged.currentUser) {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const rememberUserRaw = localStorage.getItem('serenitycare_remember_user');
+          const rememberToken = localStorage.getItem('serenitycare_remember_token');
+          if (rememberUserRaw) {
+            const remUser = JSON.parse(rememberUserRaw);
+            const found = (merged.users || []).find(u => u.id === remUser.id || u.email === remUser.email);
+            if (found) {
+              merged.currentUser = { ...found };
+              merged.sessionToken = rememberToken || 'tok_remembered';
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    return merged;
   }
 
   saveState(stateToSave, syncToCloud = true) {
     const currentState = stateToSave || this.state;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
+      // Strip transient session data so credentials/session are never stored in global DB state
+      const toSave = { ...currentState };
+      delete toSave.currentUser;
+      delete toSave.sessionToken;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch (e) {
       console.error('Error saving state to localStorage:', e);
     }
@@ -298,7 +348,10 @@ class ReactiveStore {
 
     if (saveToLocal) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+        const toSave = { ...this.state };
+        delete toSave.currentUser;
+        delete toSave.sessionToken;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
       } catch (e) {}
     }
 
@@ -310,7 +363,10 @@ class ReactiveStore {
    * Push state to Cloudflare KV storage
    */
   async pushToServer(stateToPush) {
-    const payload = stateToPush || this.state;
+    const raw = stateToPush || this.state;
+    const payload = { ...raw };
+    delete payload.currentUser;
+    delete payload.sessionToken;
     payload.lastSyncedAt = new Date().toISOString();
     payload.stateVersion = Date.now();
 
@@ -457,7 +513,10 @@ class ReactiveStore {
   async mutate(mutationFn, eventName = 'state:changed', eventPayload = null) {
     mutationFn(this.state);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      const toSave = { ...this.state };
+      delete toSave.currentUser;
+      delete toSave.sessionToken;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch (e) {}
     this.emit(eventName, eventPayload);
     return await this.pushToServer(this.state);
@@ -465,7 +524,7 @@ class ReactiveStore {
 
   // --- AUTH ACTIONS ---
 
-  loginUser(emailOrUsername, password) {
+  loginUser(emailOrUsername, password, remember = false) {
     if (!Array.isArray(this.state.users) || this.state.users.length === 0) {
       this.state.users = JSON.parse(JSON.stringify(INITIAL_STATE.users));
     }
@@ -543,6 +602,28 @@ class ReactiveStore {
     }
 
     const token = 'tok_' + Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+
+    // Save session in sessionStorage (isolated to current browser tab)
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('serenitycare_session_user', JSON.stringify(user));
+        sessionStorage.setItem('serenitycare_session_token', token);
+      }
+    } catch (e) {}
+
+    // Handle persistent "Remember workstation session"
+    try {
+      if (typeof localStorage !== 'undefined') {
+        if (remember) {
+          localStorage.setItem('serenitycare_remember_user', JSON.stringify(user));
+          localStorage.setItem('serenitycare_remember_token', token);
+        } else {
+          localStorage.removeItem('serenitycare_remember_user');
+          localStorage.removeItem('serenitycare_remember_token');
+        }
+      }
+    } catch (e) {}
+
     this.mutate(s => {
       const u = s.users.find(usr => usr.id === user.id);
       if (u) {
@@ -565,8 +646,8 @@ class ReactiveStore {
     return { success: true, user, token };
   }
 
-  forceLoginAsAdmin() {
-    return this.loginUser('admin@serenitycare.org', 'Admin@Serenity2026!');
+  forceLoginAsAdmin(remember = false) {
+    return this.loginUser('admin@serenitycare.org', 'Admin@Serenity2026!', remember);
   }
 
   resetAdminCredentials() {
@@ -579,10 +660,30 @@ class ReactiveStore {
       this.state.users.unshift(defaultAdmin);
     }
     this.saveState();
-    return this.forceLoginAsAdmin();
+    return { success: true, message: 'Default admin credentials restored (admin / Admin@Serenity2026!).' };
   }
 
   logout() {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('serenitycare_session_user');
+        sessionStorage.removeItem('serenitycare_session_token');
+      }
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('serenitycare_remember_user');
+        localStorage.removeItem('serenitycare_remember_token');
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (parsed.currentUser || parsed.sessionToken)) {
+            delete parsed.currentUser;
+            delete parsed.sessionToken;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          }
+        }
+      }
+    } catch (e) {}
+
     this.mutate(s => {
       if (s.currentUser) {
         s.activityLogs.unshift({
@@ -601,6 +702,11 @@ class ReactiveStore {
   setCurrentUser(userId) {
     const user = this.state.users.find(u => u.id === userId);
     if (user) {
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('serenitycare_session_user', JSON.stringify(user));
+        }
+      } catch (e) {}
       this.mutate(s => {
         s.currentUser = { ...user };
         s.activityLogs.unshift({
