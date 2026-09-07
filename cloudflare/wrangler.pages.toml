@@ -1,0 +1,27 @@
+# Cloudflare Pages Build & Functions Configuration
+name = "serenitycare-sober-house"
+compatibility_date = "2024-09-01"
+pages_build_output_dir = "."
+
+# Cloudflare Pages Functions in /functions/api are executed automatically.
+#
+# To bind your Cloudflare KV, D1, and R2 to Pages:
+# 1. Go to Cloudflare Dashboard: dash.cloudflare.com
+# 2. Open Workers & Pages -> your Pages project -> Settings -> Functions
+# 3. Under "KV namespace bindings": Add binding with variable name: SOBBER_KV
+# 4. Under "D1 database bindings": Add binding with variable name: DB -> serenitycare-db
+# 5. Under "R2 bucket bindings": Add binding with variable name: BUCKET -> your R2 bucket
+#
+# If you prefer to define bindings directly in this file, uncomment and insert your real IDs:
+# [[kv_namespaces]]
+# binding = "SOBBER_KV"
+# id = "74d57885730146898c09a729e8d3d66c"
+#
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "serenitycare-db"
+# database_id = "1710b076-d09b-462b-bdb1-3ce2d9e73045"
+#
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "sobber"

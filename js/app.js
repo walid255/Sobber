@@ -79,11 +79,20 @@ class AppRouter {
     const isAuth = window.Auth.isAuthenticated();
 
     if (isAuth) {
-      if (loginScreen) loginScreen.classList.add('hidden');
-      if (appShell) appShell.classList.remove('hidden');
+      if (loginScreen) {
+        loginScreen.classList.add('hidden');
+        loginScreen.style.setProperty('display', 'none', 'important');
+      }
+      if (appShell) {
+        appShell.classList.remove('hidden');
+        appShell.style.setProperty('display', 'flex', 'important');
+      }
 
       const state = window.AppStore.getState();
       const currentUser = state.currentUser;
+
+      // Update header widgets and user badge
+      this.updateHeaderAndNav(state);
 
       // Initialize individual user language preference
       if (currentUser && window.I18n) {
@@ -101,13 +110,21 @@ class AppRouter {
 
       this.navigate(route, true);
     } else {
-      if (loginScreen) loginScreen.classList.remove('hidden');
-      if (appShell) appShell.classList.add('hidden');
+      if (loginScreen) {
+        loginScreen.classList.remove('hidden');
+        loginScreen.style.setProperty('display', 'flex', 'important');
+      }
+      if (appShell) {
+        appShell.classList.add('hidden');
+        appShell.style.setProperty('display', 'none', 'important');
+      }
     }
 
-    if (window.lucide) {
-      window.lucide.createIcons();
-    }
+    try {
+      if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+      }
+    } catch (e) {}
   }
 
   bindHeaderControls() {

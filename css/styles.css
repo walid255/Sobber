@@ -280,3 +280,19 @@ body {
     height: 160px;
   }
 }
+
+/* Guaranteed Display Rules for Login & App Shell */
+.hidden {
+  display: none !important;
+}
+
+#login-screen.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+#app-shell.hidden {
+  display: none !important;
+}
