@@ -252,10 +252,31 @@ body {
 }
 
 /* Sidebar Collapse & Expand Utilities */
+#sidebar {
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 #sidebar.sidebar-collapsed {
   transform: translateX(-100%) !important;
 }
 
+#app-shell-main {
+  transition: padding-left 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 #app-shell-main.sidebar-collapsed {
   padding-left: 0 !important;
+}
+
+/* Passport Photo Styling */
+.passport-photo-box {
+  width: 105px;
+  height: 140px;
+  aspect-ratio: 3 / 4;
+}
+@media (min-width: 640px) {
+  .passport-photo-box {
+    width: 120px;
+    height: 160px;
+  }
 }

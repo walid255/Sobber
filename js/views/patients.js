@@ -251,54 +251,149 @@ class PatientsView {
   }
 
   /**
-   * Modal to register a brand new patient / resident
+   * Helper to compress and crop uploaded images to standard passport photo format (35x45mm / 3:4)
+   */
+  compressAndCropPassportPhoto(file, callback) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // Standard passport aspect ratio (3:4, width: 450px, height: 600px)
+        const targetW = 450;
+        const targetH = 600;
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW;
+        canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+
+        // Center crop to 3:4 focusing on head and upper body
+        const imgRatio = img.width / img.height;
+        const targetRatio = targetW / targetH; // 0.75
+        let srcX = 0, srcY = 0, srcW = img.width, srcH = img.height;
+
+        if (imgRatio > targetRatio) {
+          srcW = img.height * targetRatio;
+          srcX = (img.width - srcW) / 2;
+        } else {
+          srcH = img.width / targetRatio;
+          srcY = Math.max(0, (img.height - srcH) * 0.2);
+        }
+
+        ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, targetW, targetH);
+        const passportDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        callback(passportDataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /**
+   * Modal to register a brand new patient / resident with mobile-friendly passport photo studio
    */
   openAddPatientModal() {
-    const defaultPhoto = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=300&auto=format&fit=crop&q=80';
+    const defaultPhoto = 'assets/avatar-placeholder.svg';
 
     const html = `
-      <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
+      <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-200">
         <div class="flex items-center gap-2.5">
-          <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center">
+          <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
             <i data-lucide="user-plus" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="text-lg font-bold text-slate-900">Clinical Resident Admission</h3>
-            <p class="text-xs text-slate-500">Comprehensive intake evaluation, next of kin &amp; psychiatric history</p>
+            <h3 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Clinical Resident Admission</h3>
+            <p class="text-[11px] text-slate-500">Intake evaluation, passport size photo &amp; psychiatric profile</p>
           </div>
         </div>
-        <button id="close-modal-x" class="p-1 rounded-lg text-slate-400 hover:bg-slate-100">
+        <button id="close-modal-x" class="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
 
-      <form id="add-patient-form" class="space-y-5 text-xs">
+      <form id="add-patient-form" class="space-y-4 text-xs">
         
-        <!-- Photo and Primary Info -->
-        <div class="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
-          <img id="patient-photo-preview" src="${defaultPhoto}" class="w-16 h-16 rounded-xl object-cover border border-slate-200 shadow-sm">
-          <div class="flex-1">
-            <label class="block font-bold text-slate-700 mb-1">Resident Photo URL / Attachment</label>
-            <input type="text" id="new-photo" value="${defaultPhoto}" class="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-teal-500">
-            <span class="text-[10px] text-slate-400">Direct image URL, Cloudflare R2 object link, or base64 data URI</span>
+        <!-- Passport Size Photo Upload Studio (Mobile-Friendly) -->
+        <div class="p-3 sm:p-4 bg-gradient-to-br from-slate-50 via-teal-50/20 to-slate-50 rounded-2xl border border-slate-200 shadow-xs">
+          <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+            
+            <!-- Passport Photo Frame Box (35x45mm / 3:4 aspect ratio) -->
+            <div class="relative shrink-0 flex flex-col items-center">
+              <div class="relative passport-photo-box rounded-xl overflow-hidden border-2 border-teal-600 shadow-md bg-slate-100 flex items-center justify-center">
+                <img id="patient-photo-preview" src="${defaultPhoto}" alt="Passport Photo" class="w-full h-full object-cover">
+                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/75 to-transparent py-1 text-center">
+                  <span class="text-[9px] text-white font-extrabold tracking-wider uppercase">35&times;45 mm</span>
+                </div>
+              </div>
+              <span class="mt-1 px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-bold">Passport Photo</span>
+            </div>
+
+            <!-- Upload & Camera Controls -->
+            <div class="flex-1 w-full text-center sm:text-left space-y-2">
+              <div>
+                <label class="block font-bold text-slate-800 text-xs sm:text-sm">Resident Passport Picture *</label>
+                <p class="text-[11px] text-slate-500 mt-0.5">
+                  Upload a photo from your device/gallery, or use the camera to snap a live passport picture. Auto-cropped to 35&times;45mm.
+                </p>
+              </div>
+
+              <!-- Hidden File and Camera Inputs -->
+              <input type="file" id="patient-file-input" accept="image/*" class="hidden">
+              <input type="file" id="patient-camera-input" accept="image/*" capture="user" class="hidden">
+
+              <!-- Action Buttons (Touch-friendly 40px+ tap targets) -->
+              <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                <button type="button" id="btn-upload-photo" class="px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:border-teal-500 hover:text-teal-700 text-slate-700 font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95">
+                  <i data-lucide="upload" class="w-4 h-4 text-teal-600"></i>
+                  <span>Upload Photo</span>
+                </button>
+
+                <button type="button" id="btn-camera-photo" class="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95">
+                  <i data-lucide="camera" class="w-4 h-4 text-white"></i>
+                  <span>Snap Camera Photo</span>
+                </button>
+
+                <button type="button" id="btn-reset-photo" class="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-xs transition" title="Reset to default placeholder">
+                  <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                </button>
+              </div>
+
+              <div id="photo-status-msg" class="text-[11px] font-semibold text-emerald-700 flex items-center justify-center sm:justify-start gap-1 hidden">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
+                <span id="photo-status-text">Passport photo ready</span>
+              </div>
+
+              <!-- Collapsible manual URL fallback -->
+              <div class="pt-1">
+                <details class="text-[10px] text-slate-400">
+                  <summary class="cursor-pointer font-semibold text-slate-500 hover:text-teal-700">Paste Image URL / Data URI instead</summary>
+                  <input type="text" id="new-photo" value="${defaultPhoto}" class="mt-1.5 w-full text-[11px] px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-teal-500 font-mono text-slate-700">
+                </details>
+              </div>
+
+            </div>
+
           </div>
         </div>
 
-        <!-- Personal Demographics -->
+        <!-- 1. Personal Demographics -->
         <div>
-          <h4 class="font-bold text-slate-800 uppercase tracking-wider mb-2 text-[11px] text-teal-800">1. Personal Demographics</h4>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <h4 class="font-bold text-slate-800 uppercase tracking-wider mb-2 text-[11px] text-teal-800 flex items-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center text-[10px]">1</span>
+            <span>Personal Demographics</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Full Legal Name *</label>
-              <input type="text" id="new-name" required placeholder="E.g., Michael Turner" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
+              <input type="text" id="new-name" required placeholder="E.g., Michael Turner" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 text-xs font-medium">
             </div>
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Date of Birth *</label>
-              <input type="date" id="new-dob" required value="1990-01-01" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
+              <input type="date" id="new-dob" required value="1990-01-01" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 text-xs">
             </div>
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Gender *</label>
-              <select id="new-gender" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
+              <select id="new-gender" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 text-xs">
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
                 <option value="Other">Other</option>
@@ -306,7 +401,7 @@ class PatientsView {
             </div>
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Blood Group</label>
-              <select id="new-blood" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
+              <select id="new-blood" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 text-xs font-mono">
                 <option value="O+">O+</option>
                 <option value="O-">O-</option>
                 <option value="A+">A+</option>
@@ -319,52 +414,58 @@ class PatientsView {
             </div>
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Phone Number</label>
-              <input type="text" id="new-phone" placeholder="+1 (555) 000-0000" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500">
+              <input type="text" id="new-phone" placeholder="+255 700 000 000" class="w-full px-3 py-2 rounded-lg border border-slate-200 focus:border-teal-500 text-xs">
             </div>
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Assigned Room &amp; Bed</label>
               <div class="grid grid-cols-2 gap-1.5">
-                <input type="text" id="new-room" placeholder="Room 105" class="w-full px-2 py-2 rounded-lg border border-slate-200">
-                <input type="text" id="new-bed" placeholder="Bed A" class="w-full px-2 py-2 rounded-lg border border-slate-200">
+                <input type="text" id="new-room" placeholder="Room 105" class="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs">
+                <input type="text" id="new-bed" placeholder="Bed A" class="w-full px-2 py-2 rounded-lg border border-slate-200 text-xs">
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Next of Kin -->
+        <!-- 2. Emergency Contact & Next of Kin -->
         <div>
-          <h4 class="font-bold text-slate-800 uppercase tracking-wider mb-2 text-[11px] text-teal-800">2. Emergency Contact &amp; Next of Kin</h4>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <h4 class="font-bold text-slate-800 uppercase tracking-wider mb-2 text-[11px] text-teal-800 flex items-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center text-[10px]">2</span>
+            <span>Emergency Contact &amp; Next of Kin</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Contact Name *</label>
-              <input type="text" id="new-nok-name" required placeholder="E.g., Sarah Turner" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="new-nok-name" required placeholder="E.g., Sarah Turner" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Relationship *</label>
-              <input type="text" id="new-nok-rel" required placeholder="Spouse, Mother, Sibling" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="new-nok-rel" required placeholder="Spouse, Mother, Sibling" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Contact Phone *</label>
-              <input type="text" id="new-nok-phone" required placeholder="+1 (555) 000-1111" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="new-nok-phone" required placeholder="+255 700 000 111" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
           </div>
         </div>
 
-        <!-- Psychiatric & Addiction Background -->
+        <!-- 3. Psychiatric & Substance Evaluation -->
         <div>
-          <h4 class="font-bold text-slate-800 uppercase tracking-wider mb-2 text-[11px] text-teal-800">3. Psychiatric &amp; Substance Evaluation</h4>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <h4 class="font-bold text-slate-800 uppercase tracking-wider mb-2 text-[11px] text-teal-800 flex items-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center text-[10px]">3</span>
+            <span>Psychiatric &amp; Substance Profile</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label class="block font-semibold text-slate-600 mb-1">Primary Substance of Abuse *</label>
-              <input type="text" id="new-substance" required placeholder="E.g., Alcohol, Opioids, Meth" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <label class="block font-semibold text-slate-600 mb-1">Primary Substance *</label>
+              <input type="text" id="new-substance" required placeholder="E.g., Alcohol, Opioids, Meth" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-rose-700">
             </div>
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Addiction Duration (Years)</label>
-              <input type="number" id="new-duration" value="5" min="0" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="number" id="new-duration" value="5" min="0" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
             <div>
               <label class="block font-semibold text-slate-600 mb-1">Suicide Risk Evaluation</label>
-              <select id="new-risk" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <select id="new-risk" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-bold">
                 <option value="Low">Low</option>
                 <option value="Moderate (Monitored)">Moderate (Monitored)</option>
                 <option value="High (Close Observation)">High (Close Observation)</option>
@@ -373,24 +474,24 @@ class PatientsView {
           </div>
           <div class="mt-2.5">
             <label class="block font-semibold text-slate-600 mb-1">Clinical Co-Occurring Diagnoses (semicolon separated)</label>
-            <input type="text" id="new-diagnoses" placeholder="E.g., Major Depression; PTSD; Generalized Anxiety" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+            <input type="text" id="new-diagnoses" placeholder="E.g., Major Depression; PTSD; Generalized Anxiety" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
           </div>
           <div class="mt-2.5">
             <label class="block font-semibold text-slate-600 mb-1">Allergies (semicolon separated)</label>
-            <input type="text" id="new-allergies" placeholder="E.g., Penicillin; Latex; None" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+            <input type="text" id="new-allergies" placeholder="E.g., Penicillin; Latex; None" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
           </div>
           <div class="mt-2.5">
             <label class="block font-semibold text-slate-600 mb-1">Intake Assessment Notes</label>
-            <textarea id="new-notes" rows="2" placeholder="Clinical observations, motivation level, detoxification requirements..." class="w-full px-3 py-2 rounded-lg border border-slate-200"></textarea>
+            <textarea id="new-notes" rows="2" placeholder="Clinical observations, motivation level, detoxification requirements..." class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs"></textarea>
           </div>
         </div>
 
-        <!-- Form Submit Actions -->
-        <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
-          <button type="button" id="cancel-add-patient-btn" class="px-5 py-2.5 rounded-xl btn-decor-secondary font-semibold">
+        <!-- Sticky Form Submit Actions (Mobile-Optimized) -->
+        <div class="pt-3 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 sticky bottom-0 bg-white/95 backdrop-blur-xs py-2">
+          <button type="button" id="cancel-add-patient-btn" class="w-full sm:w-auto px-5 py-2.5 rounded-xl btn-decor-secondary font-semibold text-center">
             Cancel
           </button>
-          <button type="submit" class="px-6 py-2.5 rounded-xl btn-decor-primary font-bold flex items-center gap-2">
+          <button type="submit" class="w-full sm:w-auto px-6 py-2.5 rounded-xl btn-decor-primary font-bold flex items-center justify-center gap-2">
             <i data-lucide="check" class="w-4 h-4"></i>
             <span>Confirm Admission</span>
           </button>
@@ -401,12 +502,61 @@ class PatientsView {
 
     window.AppModal.showCustom(html, 'max-w-2xl');
 
-    // Handle photo preview change
+    // Handle photo preview change and inputs
     const photoInput = document.getElementById('new-photo');
     const photoImg = document.getElementById('patient-photo-preview');
-    photoInput.oninput = () => {
-      photoImg.src = photoInput.value || defaultPhoto;
+    const fileInput = document.getElementById('patient-file-input');
+    const cameraInput = document.getElementById('patient-camera-input');
+    const uploadBtn = document.getElementById('btn-upload-photo');
+    const cameraBtn = document.getElementById('btn-camera-photo');
+    const resetBtn = document.getElementById('btn-reset-photo');
+    const statusMsg = document.getElementById('photo-status-msg');
+    const statusText = document.getElementById('photo-status-text');
+
+    if (photoInput) {
+      photoInput.oninput = () => {
+        photoImg.src = photoInput.value || defaultPhoto;
+      };
+    }
+
+    if (uploadBtn && fileInput) {
+      uploadBtn.onclick = () => fileInput.click();
+    }
+
+    if (cameraBtn && cameraInput) {
+      cameraBtn.onclick = () => cameraInput.click();
+    }
+
+    const onFileSelected = (file) => {
+      if (!file) return;
+      this.compressAndCropPassportPhoto(file, (dataUrl) => {
+        if (photoImg) photoImg.src = dataUrl;
+        if (photoInput) photoInput.value = dataUrl;
+        if (statusMsg && statusText) {
+          const kb = Math.round((dataUrl.length * 3 / 4) / 1024);
+          statusText.textContent = `Passport photo ready (${kb} KB - 35x45mm)`;
+          statusMsg.classList.remove('hidden');
+        }
+      });
     };
+
+    if (fileInput) {
+      fileInput.onchange = (e) => onFileSelected(e.target.files[0]);
+    }
+
+    if (cameraInput) {
+      cameraInput.onchange = (e) => onFileSelected(e.target.files[0]);
+    }
+
+    if (resetBtn) {
+      resetBtn.onclick = () => {
+        if (photoImg) photoImg.src = defaultPhoto;
+        if (photoInput) photoInput.value = defaultPhoto;
+        if (statusMsg) statusMsg.classList.add('hidden');
+        if (fileInput) fileInput.value = '';
+        if (cameraInput) cameraInput.value = '';
+      };
+    }
 
     document.getElementById('close-modal-x').onclick = () => window.AppModal.close();
     document.getElementById('cancel-add-patient-btn').onclick = () => window.AppModal.close();
@@ -459,24 +609,28 @@ class PatientsView {
         // Show acceptance success card
         window.AppModal.showAcceptanceCard({
           title: 'Resident Admitted Successfully',
-        subtitle: `${created.name} is now registered in the medical system`,
-        icon: 'check-circle-2',
-        badgeText: 'ADMISSION COMPLETED',
-        badgeColor: 'badge-medical-emerald',
-        confirmType: 'success',
-        contentHtml: `
-          <div class="p-3 bg-teal-50 rounded-xl text-xs space-y-1">
-            <div>Patient ID: <strong>${created.id}</strong></div>
-            <div>Assigned Bed: <strong>${created.roomNumber} - ${created.bedNumber}</strong></div>
-            <div>Primary Substance: <strong>${created.psychiatricHistory.primarySubstance}</strong></div>
-          </div>
-        `,
-        confirmText: 'View Clinical Profile',
-        cancelText: 'Done',
-        onConfirm: () => {
-          this.openPatientDetailsModal(created.id);
-        }
-      });
+          subtitle: `${created.name} is now registered in the medical system`,
+          icon: 'check-circle-2',
+          badgeText: 'ADMISSION COMPLETED',
+          badgeColor: 'badge-medical-emerald',
+          confirmType: 'success',
+          contentHtml: `
+            <div class="flex items-center gap-3 p-3 bg-teal-50 rounded-xl text-xs">
+              <img src="${created.photo}" class="w-12 h-16 rounded-lg object-cover border border-teal-200">
+              <div class="space-y-0.5">
+                <div>Resident: <strong>${created.name}</strong></div>
+                <div>ID: <strong class="font-mono">${created.id}</strong></div>
+                <div>Bed: <strong>${created.roomNumber} - ${created.bedNumber}</strong></div>
+                <div>Substance: <strong>${created.psychiatricHistory.primarySubstance}</strong></div>
+              </div>
+            </div>
+          `,
+          confirmText: 'View Clinical Profile',
+          cancelText: 'Done',
+          onConfirm: () => {
+            this.openPatientDetailsModal(created.id);
+          }
+        });
       } catch (err) {
         if (submitBtn) {
           submitBtn.disabled = false;
@@ -955,37 +1109,88 @@ class PatientsView {
 
     const nok = patient.nextOfKin || {};
     const psych = patient.psychiatricHistory || {};
+    const defaultPhoto = 'assets/avatar-placeholder.svg';
 
     const html = `
-      <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-200">
+      <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-200">
         <div>
-          <h3 class="text-lg font-bold text-slate-900">Edit Resident Profile</h3>
-          <p class="text-xs text-slate-500">Update medical demographics, bed placement, next of kin, and clinical assessments</p>
+          <h3 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">Edit Resident Profile</h3>
+          <p class="text-[11px] text-slate-500">Update medical demographics, passport photo, room placement &amp; clinical assessments</p>
         </div>
-        <button id="close-edit-patient-modal" class="p-1 text-slate-400 hover:bg-slate-100 rounded-lg">
+        <button id="close-edit-patient-modal" class="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
 
-      <form id="edit-patient-form" class="space-y-4 text-xs max-h-[75vh] overflow-y-auto pr-1">
-        <!-- Personal Demographics -->
+      <form id="edit-patient-form" class="space-y-4 text-xs max-h-[78vh] overflow-y-auto pr-1">
+        
+        <!-- Passport Size Photo Upload Studio (Edit Mode) -->
+        <div class="p-3 sm:p-4 bg-gradient-to-br from-slate-50 via-teal-50/20 to-slate-50 rounded-2xl border border-slate-200 shadow-xs">
+          <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+            
+            <div class="relative shrink-0 flex flex-col items-center">
+              <div class="relative passport-photo-box rounded-xl overflow-hidden border-2 border-teal-600 shadow-md bg-slate-100 flex items-center justify-center">
+                <img id="edit-photo-preview" src="${patient.photo || defaultPhoto}" alt="Passport Photo" class="w-full h-full object-cover">
+                <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/75 to-transparent py-1 text-center">
+                  <span class="text-[9px] text-white font-extrabold tracking-wider uppercase">35&times;45 mm</span>
+                </div>
+              </div>
+              <span class="mt-1 px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-bold">Passport Photo</span>
+            </div>
+
+            <div class="flex-1 w-full text-center sm:text-left space-y-2">
+              <div>
+                <label class="block font-bold text-slate-800 text-xs sm:text-sm">Resident Passport Picture</label>
+                <p class="text-[11px] text-slate-500 mt-0.5">Upload a new passport picture from your device or snap with device camera.</p>
+              </div>
+
+              <input type="file" id="edit-file-input" accept="image/*" class="hidden">
+              <input type="file" id="edit-camera-input" accept="image/*" capture="user" class="hidden">
+
+              <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                <button type="button" id="btn-edit-upload-photo" class="px-3.5 py-2 rounded-xl bg-white border border-slate-300 hover:border-teal-500 hover:text-teal-700 text-slate-700 font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95">
+                  <i data-lucide="upload" class="w-4 h-4 text-teal-600"></i>
+                  <span>Upload Photo</span>
+                </button>
+
+                <button type="button" id="btn-edit-camera-photo" class="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition active:scale-95">
+                  <i data-lucide="camera" class="w-4 h-4 text-white"></i>
+                  <span>Snap Camera Photo</span>
+                </button>
+              </div>
+
+              <div id="edit-photo-status-msg" class="text-[11px] font-semibold text-emerald-700 flex items-center justify-center sm:justify-start gap-1 hidden">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i>
+                <span id="edit-photo-status-text">Passport photo updated</span>
+              </div>
+
+              <input type="hidden" id="edit-photo" value="${patient.photo || ''}">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 1. Personal Demographics & Placement -->
         <div class="space-y-3">
-          <h4 class="text-xs font-bold text-teal-800 uppercase tracking-wider">1. Resident Demographics &amp; Placement</h4>
+          <h4 class="text-xs font-bold text-teal-800 uppercase tracking-wider flex items-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center text-[10px]">1</span>
+            <span>Resident Demographics &amp; Placement</span>
+          </h4>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Full Legal Name *</label>
-              <input type="text" id="edit-name" required value="${patient.name}" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-semibold">
+              <input type="text" id="edit-name" required value="${patient.name}" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-semibold text-xs">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Date of Birth *</label>
-              <input type="date" id="edit-dob" required value="${patient.dob || '1995-01-01'}" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="date" id="edit-dob" required value="${patient.dob || '1995-01-01'}" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
           </div>
 
-          <div class="grid grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Gender *</label>
-              <select id="edit-gender" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <select id="edit-gender" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
                 <option value="Male" ${patient.gender === 'Male' ? 'selected' : ''}>Male</option>
                 <option value="Female" ${patient.gender === 'Female' ? 'selected' : ''}>Female</option>
                 <option value="Other" ${patient.gender === 'Other' ? 'selected' : ''}>Other</option>
@@ -993,28 +1198,28 @@ class PatientsView {
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Blood Group</label>
-              <select id="edit-blood" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono">
+              <select id="edit-blood" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono text-xs">
                 ${['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map(bg => `<option value="${bg}" ${patient.bloodGroup === bg ? 'selected' : ''}>${bg}</option>`).join('')}
               </select>
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Contact Phone</label>
-              <input type="text" id="edit-phone" value="${patient.phone || ''}" placeholder="+255 700 000 000" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="edit-phone" value="${patient.phone || ''}" placeholder="+255 700 000 000" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
           </div>
 
-          <div class="grid grid-cols-4 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Room Number *</label>
-              <input type="text" id="edit-room" required value="${patient.roomNumber}" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="edit-room" required value="${patient.roomNumber}" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Bed Number *</label>
-              <input type="text" id="edit-bed" required value="${patient.bedNumber}" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="edit-bed" required value="${patient.bedNumber}" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Recovery Stage *</label>
-              <select id="edit-stage" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-bold text-teal-800">
+              <select id="edit-stage" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-bold text-teal-800 text-xs">
                 <option value="Detoxification" ${patient.stage === 'Detoxification' ? 'selected' : ''}>Detoxification</option>
                 <option value="Inpatient Recovery" ${patient.stage === 'Inpatient Recovery' ? 'selected' : ''}>Inpatient Recovery</option>
                 <option value="Transition / Halfway" ${patient.stage === 'Transition / Halfway' ? 'selected' : ''}>Transition / Halfway</option>
@@ -1023,50 +1228,51 @@ class PatientsView {
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Sobriety Days *</label>
-              <input type="number" id="edit-streak" min="0" required value="${patient.sobrietyDays || 0}" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-bold text-teal-700">
+              <input type="number" id="edit-sobriety" min="0" required value="${patient.sobrietyDays || 0}" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-bold text-teal-700 text-xs">
             </div>
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Profile Photo URL</label>
-            <input type="url" id="edit-photo" value="${patient.photo || ''}" placeholder="https://..." class="w-full px-3 py-2 rounded-lg border border-slate-200 font-mono text-[11px]">
           </div>
         </div>
 
-        <!-- Next of Kin Section -->
+        <!-- 2. Next of Kin Section -->
         <div class="pt-3 border-t border-slate-200 space-y-3">
-          <h4 class="text-xs font-bold text-teal-800 uppercase tracking-wider">2. Next of Kin &amp; Emergency Contact</h4>
-          <div class="grid grid-cols-3 gap-3">
+          <h4 class="text-xs font-bold text-teal-800 uppercase tracking-wider flex items-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center text-[10px]">2</span>
+            <span>Next of Kin &amp; Emergency Contact</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Kin Full Name *</label>
-              <input type="text" id="edit-nok-name" required value="${nok.name || ''}" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="edit-nok-name" required value="${nok.name || ''}" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Relationship *</label>
-              <input type="text" id="edit-nok-rel" required value="${nok.relationship || ''}" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="edit-nok-rel" required value="${nok.relationship || ''}" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Emergency Phone *</label>
-              <input type="text" id="edit-nok-phone" required value="${nok.phone || ''}" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="edit-nok-phone" required value="${nok.phone || ''}" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
           </div>
         </div>
 
-        <!-- Psychiatric & Clinical Assessment -->
+        <!-- 3. Psychiatric & Clinical Assessment -->
         <div class="pt-3 border-t border-slate-200 space-y-3">
-          <h4 class="text-xs font-bold text-teal-800 uppercase tracking-wider">3. Psychiatric History &amp; Substance Profile</h4>
-          <div class="grid grid-cols-3 gap-3">
+          <h4 class="text-xs font-bold text-teal-800 uppercase tracking-wider flex items-center gap-1.5">
+            <span class="w-4 h-4 rounded-full bg-teal-100 text-teal-800 flex items-center justify-center text-[10px]">3</span>
+            <span>Psychiatric History &amp; Substance Profile</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Primary Substance *</label>
-              <input type="text" id="edit-substance" required value="${psych.primarySubstance || 'Opioids'}" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-semibold text-rose-700">
+              <input type="text" id="edit-substance" required value="${psych.primarySubstance || 'Opioids'}" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-semibold text-rose-700 text-xs">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Addiction Duration (Yrs)</label>
-              <input type="number" id="edit-duration" min="0" value="${psych.addictionDurationYears || 1}" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="number" id="edit-duration" min="0" value="${psych.addictionDurationYears || 1}" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Suicide Risk Level</label>
-              <select id="edit-risk" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-bold">
+              <select id="edit-risk" class="w-full px-3 py-2 rounded-lg border border-slate-200 font-bold text-xs">
                 <option value="Low" ${psych.suicideRisk === 'Low' ? 'selected' : ''}>Low Risk</option>
                 <option value="Moderate" ${psych.suicideRisk === 'Moderate' ? 'selected' : ''}>Moderate Risk</option>
                 <option value="High" ${psych.suicideRisk === 'High' ? 'selected' : ''}>High Risk</option>
@@ -1074,31 +1280,70 @@ class PatientsView {
             </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-slate-700 mb-1">Psychiatric Diagnoses (Semicolon separated)</label>
-              <input type="text" id="edit-diagnoses" value="${(psych.diagnoses || []).join('; ')}" placeholder="PTSD; Severe Depressive Episode" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="edit-diagnoses" value="${(psych.diagnoses || []).join('; ')}" placeholder="PTSD; Severe Depressive Episode" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
             <div>
               <label class="block font-bold text-slate-700 mb-1">Allergies (Semicolon separated)</label>
-              <input type="text" id="edit-allergies" value="${(psych.allergies || []).join('; ')}" placeholder="Penicillin; Sulfa Drugs" class="w-full px-3 py-2 rounded-lg border border-slate-200">
+              <input type="text" id="edit-allergies" value="${(psych.allergies || []).join('; ')}" placeholder="Penicillin; Sulfa Drugs" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">
             </div>
           </div>
 
           <div>
             <label class="block font-bold text-slate-700 mb-1">Clinical Assessment &amp; Notes</label>
-            <textarea id="edit-notes" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200">${psych.notes || ''}</textarea>
+            <textarea id="edit-notes" rows="2" class="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs">${psych.notes || ''}</textarea>
           </div>
         </div>
 
-        <div class="pt-4 border-t border-slate-200 flex justify-end gap-3">
-          <button type="button" id="cancel-edit-patient-btn" class="px-4 py-2 rounded-xl btn-decor-secondary font-semibold">Cancel</button>
-          <button type="submit" class="px-5 py-2 rounded-xl btn-decor-primary font-bold">Save Changes</button>
+        <div class="pt-3 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-2.5 sticky bottom-0 bg-white/95 backdrop-blur-xs py-2">
+          <button type="button" id="cancel-edit-patient-btn" class="w-full sm:w-auto px-4 py-2.5 rounded-xl btn-decor-secondary font-semibold text-center">Cancel</button>
+          <button type="submit" class="w-full sm:w-auto px-5 py-2.5 rounded-xl btn-decor-primary font-bold text-center">Save Changes</button>
         </div>
       </form>
     `;
 
     window.AppModal.showCustom(html, 'max-w-3xl');
+
+    // Handle photo preview change and inputs in edit modal
+    const photoInput = document.getElementById('edit-photo');
+    const photoImg = document.getElementById('edit-photo-preview');
+    const fileInput = document.getElementById('edit-file-input');
+    const cameraInput = document.getElementById('edit-camera-input');
+    const uploadBtn = document.getElementById('btn-edit-upload-photo');
+    const cameraBtn = document.getElementById('btn-edit-camera-photo');
+    const statusMsg = document.getElementById('edit-photo-status-msg');
+    const statusText = document.getElementById('edit-photo-status-text');
+
+    if (uploadBtn && fileInput) {
+      uploadBtn.onclick = () => fileInput.click();
+    }
+
+    if (cameraBtn && cameraInput) {
+      cameraBtn.onclick = () => cameraInput.click();
+    }
+
+    const onFileSelected = (file) => {
+      if (!file) return;
+      this.compressAndCropPassportPhoto(file, (dataUrl) => {
+        if (photoImg) photoImg.src = dataUrl;
+        if (photoInput) photoInput.value = dataUrl;
+        if (statusMsg && statusText) {
+          const kb = Math.round((dataUrl.length * 3 / 4) / 1024);
+          statusText.textContent = `Passport photo updated (${kb} KB - 35x45mm)`;
+          statusMsg.classList.remove('hidden');
+        }
+      });
+    };
+
+    if (fileInput) {
+      fileInput.onchange = (e) => onFileSelected(e.target.files[0]);
+    }
+
+    if (cameraInput) {
+      cameraInput.onchange = (e) => onFileSelected(e.target.files[0]);
+    }
 
     document.getElementById('close-edit-patient-modal').onclick = () => window.AppModal.close();
     document.getElementById('cancel-edit-patient-btn').onclick = () => window.AppModal.close();

@@ -55,7 +55,7 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
   <!-- Custom Medical Stylesheet & Print Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=20260907-sobber7">
+  <link rel="stylesheet" href="css/styles.css?v=20260907-sobber9">
 </head>
 <body class="bg-slate-100 min-h-screen antialiased selection:bg-teal-500 selection:text-white">
 
@@ -187,14 +187,22 @@
   <!-- MAIN APPLICATION SHELL (Displayed when authenticated)                    -->
   <!-- ========================================================================= -->
   <div id="app-shell" class="min-h-screen flex w-full hidden">
+ 
+    <!-- Mobile Semi-Transparent Backdrop for Sidebar Drawer -->
+    <div id="sidebar-backdrop" class="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-30 hidden transition-opacity md:hidden"></div>
 
-    <!-- Left Sidebar Navigation -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white flex flex-col justify-between transition-transform duration-300 md:translate-x-0 -translate-x-full shadow-2xl border-r border-slate-800">
+    <!-- Left Sidebar Navigation (Collapsible & Mobile Drawer) -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white flex flex-col justify-between shadow-2xl border-r border-slate-800 -translate-x-full md:translate-x-0">
       
       <div>
-        <!-- Facility Logo & Brand -->
-        <div class="p-5 border-b border-slate-800/80 flex items-center gap-3">
-          <img id="top-bar-logo" src="assets/logo.svg" alt="SerenityCare Logo" class="h-10 w-auto object-contain">
+        <!-- Facility Logo, Brand & Hide Sidebar Trigger -->
+        <div class="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between gap-2">
+          <img id="top-bar-logo" src="assets/logo.svg" alt="SerenityCare Logo" class="h-9 sm:h-10 w-auto object-contain">
+          <!-- Button to hide/collapse sidebar on mobile & desktop -->
+          <button type="button" id="sidebar-hide-btn" class="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Hide Navigation Menu">
+            <i data-lucide="panel-left-close" class="w-5 h-5 hidden md:block"></i>
+            <i data-lucide="x" class="w-5 h-5 md:hidden"></i>
+          </button>
         </div>
 
         <!-- Navigation Menu -->
@@ -401,23 +409,23 @@
   </div>
 
   <!-- SPA Javascript Modules Loaded in Strict Order with Cache-Busting -->
-  <script src="js/i18n.js?v=20260907-sobber7"></script>
-  <script src="js/store.js?v=20260907-sobber7"></script>
-  <script src="js/auth.js?v=20260907-sobber7"></script>
-  <script src="js/components/modal.js?v=20260907-sobber7"></script>
-  <script src="js/components/reminders.js?v=20260907-sobber7"></script>
-  <script src="js/components/pdf-generator.js?v=20260907-sobber7"></script>
-  <script src="js/admin.js?v=20260907-sobber7"></script>
-  <script src="js/views/dashboard.js?v=20260907-sobber7"></script>
-  <script src="js/views/patients.js?v=20260907-sobber7"></script>
-  <script src="js/views/medications.js?v=20260907-sobber7"></script>
-  <script src="js/views/inventory.js?v=20260907-sobber7"></script>
-  <script src="js/views/timetable.js?v=20260907-sobber7"></script>
-  <script src="js/views/certificates.js?v=20260907-sobber7"></script>
-  <script src="js/views/batch-upload.js?v=20260907-sobber7"></script>
-  <script src="js/views/payments.js?v=20260907-sobber7"></script>
-  <script src="js/views/users.js?v=20260907-sobber7"></script>
-  <script src="js/views/settings.js?v=20260907-sobber7"></script>
-  <script src="js/app.js?v=20260907-sobber7"></script>
+  <script src="js/i18n.js?v=20260907-sobber9"></script>
+  <script src="js/store.js?v=20260907-sobber9"></script>
+  <script src="js/auth.js?v=20260907-sobber9"></script>
+  <script src="js/components/modal.js?v=20260907-sobber9"></script>
+  <script src="js/components/reminders.js?v=20260907-sobber9"></script>
+  <script src="js/components/pdf-generator.js?v=20260907-sobber9"></script>
+  <script src="js/admin.js?v=20260907-sobber9"></script>
+  <script src="js/views/dashboard.js?v=20260907-sobber9"></script>
+  <script src="js/views/patients.js?v=20260907-sobber9"></script>
+  <script src="js/views/medications.js?v=20260907-sobber9"></script>
+  <script src="js/views/inventory.js?v=20260907-sobber9"></script>
+  <script src="js/views/timetable.js?v=20260907-sobber9"></script>
+  <script src="js/views/certificates.js?v=20260907-sobber9"></script>
+  <script src="js/views/batch-upload.js?v=20260907-sobber9"></script>
+  <script src="js/views/payments.js?v=20260907-sobber9"></script>
+  <script src="js/views/users.js?v=20260907-sobber9"></script>
+  <script src="js/views/settings.js?v=20260907-sobber9"></script>
+  <script src="js/app.js?v=20260907-sobber9"></script>
 </body>
 </html>

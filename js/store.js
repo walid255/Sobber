@@ -1156,6 +1156,9 @@ class ReactiveStore {
         }),
         body: JSON.stringify(this.state.timetable)
       });
+    } catch (e) {}
+  }
+
   // --- BILLING & PAYMENTS ACTIONS (TZS) ---
 
   formatCurrency(amount) {

@@ -54,7 +54,7 @@ class ModalSystem {
   showCustom(contentHtml, maxWidthClass = 'max-w-xl') {
     this.init();
     const box = document.getElementById('modal-card-box');
-    box.className = `relative w-full ${maxWidthClass} modal-acceptance-card animate-modal-pop p-6 max-h-[92vh] overflow-y-auto`;
+    box.className = `relative w-full ${maxWidthClass} modal-acceptance-card animate-modal-pop p-4 sm:p-6 max-h-[94vh] overflow-y-auto`;
     box.innerHTML = contentHtml;
     this.container.classList.remove('hidden');
 
@@ -258,6 +258,7 @@ class ModalSystem {
         this.close();
       });
     });
+  }
 
   async showCloudDiagnosticModal() {
     this.init();

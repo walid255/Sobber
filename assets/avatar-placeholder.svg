@@ -1,0 +1,8 @@
+﻿<svg xmlns=http://www.w3.org/2000/svg viewBox=0 0 300 400 width=300 height=400>
+  <rect width=300 height=400 fill=#f1f5f9/>
+  <!-- Silhouette head & body -->
+  <circle cx=150 cy=140 r=62 fill=#cbd5e1/>
+  <path d=M45 370 C45 255, 95 228, 150 228 C205 228, 255 255, 255 370 Z fill=#cbd5e1/>
+  <rect x=2 y=2 width=296 height=396 fill=none stroke=#0d9488 stroke-width=3 rx=16 stroke-dasharray=8 4/>
+  <text x=150 y=382 font-family=-apple-system, BlinkMacSystemFont, sans-serif font-size=13 font-weight=700 fill=#0d9488 text-anchor=middle letter-spacing=1>35 x 45 mm PASSPORT</text>
+</svg>
