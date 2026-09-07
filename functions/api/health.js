@@ -25,20 +25,32 @@ const JSON_HEADERS = {
   'Cloudflare-CDN-Cache-Control': 'no-store'
 };
 
+function isKV(val, key = '') {
+  if (!val || typeof val !== 'object') return false;
+  const upper = String(key).toUpperCase();
+  if (upper === 'ASSETS' || upper === 'DB' || upper === 'BUCKET' || upper === 'CF_PAGES') return false;
+  if (typeof val.fetch === 'function') return false;
+  if (typeof val.prepare === 'function' || typeof val.exec === 'function') return false;
+  return typeof val.get === 'function' && typeof val.put === 'function' && typeof val.list === 'function';
+}
+
 function getKV(context) {
-  if (context.env?.SOBBER_KV) return context.env.SOBBER_KV;
-  if (context.env?.MY_KV_NAMESPACE) return context.env.MY_KV_NAMESPACE;
-  if (context.env?.KV) return context.env.KV;
-  if (context.env?.SOBER_KV) return context.env.SOBER_KV;
-  if (context.env?.SERENITYCARE_KV) return context.env.SERENITYCARE_KV;
-  
-  if (context.env && typeof context.env === 'object') {
-    for (const key of Object.keys(context.env)) {
-      const val = context.env[key];
-      if (val && typeof val.get === 'function' && typeof val.put === 'function') {
-        return val;
-      }
-    }
+  const env = context?.env;
+  if (!env || typeof env !== 'object') return null;
+
+  const candidates = [
+    env.SOBBER_KV,
+    env.MY_KV_NAMESPACE,
+    env.KV,
+    env.SOBER_KV,
+    env.SERENITYCARE_KV
+  ];
+  for (const c of candidates) {
+    if (c && isKV(c)) return c;
+  }
+
+  for (const [key, val] of Object.entries(env)) {
+    if (isKV(val, key)) return val;
   }
   return null;
 }
@@ -55,20 +67,22 @@ export async function onRequestGet(context) {
   const db = context.env?.DB;
   const bucket = context.env?.BUCKET;
 
-  let d1Status = { connected: Boolean(db), tables: 0, counts: {} };
-  if (db) {
+  let d1Status = { connected: Boolean(db && typeof db.prepare === 'function'), tables: 0, counts: {} };
+  if (db && typeof db.prepare === 'function') {
     try {
       const tblRes = await db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
       d1Status.tables = (tblRes.results || []).length;
       if (d1Status.tables > 0) {
-        const uCount = await db.prepare("SELECT COUNT(*) as c FROM users").first();
-        const pCount = await db.prepare("SELECT COUNT(*) as c FROM patients").first();
-        const payCount = await db.prepare("SELECT COUNT(*) as c FROM payments").first();
-        d1Status.counts = {
-          users: uCount ? uCount.c : 0,
-          patients: pCount ? pCount.c : 0,
-          payments: payCount ? payCount.c : 0
-        };
+        try {
+          const uCount = await db.prepare("SELECT COUNT(*) as c FROM users").first();
+          const pCount = await db.prepare("SELECT COUNT(*) as c FROM patients").first();
+          const payCount = await db.prepare("SELECT COUNT(*) as c FROM payments").first();
+          d1Status.counts = {
+            users: uCount ? uCount.c : 0,
+            patients: pCount ? pCount.c : 0,
+            payments: payCount ? payCount.c : 0
+          };
+        } catch (cntErr) {}
       }
     } catch (e) {
       d1Status.error = e.message;
@@ -78,10 +92,18 @@ export async function onRequestGet(context) {
   let kvOperational = false;
   if (kv) {
     try {
-      await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+      await kv.get('sobber_state', { type: 'text' });
       kvOperational = true;
-    } catch (e) {}
+    } catch (e) {
+      kvOperational = false;
+    }
   }
+
+  let kvBindingName = 'None';
+  if (context.env?.SOBBER_KV) kvBindingName = 'SOBBER_KV';
+  else if (context.env?.MY_KV_NAMESPACE) kvBindingName = 'MY_KV_NAMESPACE';
+  else if (context.env?.KV) kvBindingName = 'KV';
+  else if (kv) kvBindingName = 'Active_KV';
 
   return new Response(JSON.stringify({
     system: 'SerenityCare Recovery Management System',
@@ -91,7 +113,7 @@ export async function onRequestGet(context) {
     kv: {
       connected: Boolean(kv),
       operational: kvOperational,
-      binding: context.env?.SOBBER_KV ? 'SOBBER_KV' : (context.env?.MY_KV_NAMESPACE ? 'MY_KV_NAMESPACE' : (context.env?.KV ? 'KV' : 'None'))
+      binding: kvBindingName
     },
     d1: d1Status,
     r2: {

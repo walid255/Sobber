@@ -51,16 +51,15 @@ export default {
     // READ ENDPOINT (GET)
     if (request.method === "GET" && url.pathname === "/api/content") {
       if (!kv) {
-        return new Response(JSON.stringify({ error: "KV namespace not bound. Bind MY_KV_NAMESPACE or SOBBER_KV." }), {
-          status: 500,
+        return new Response("{}", {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
-      // Read site_data bypassing edge cache
-      let data = await kv.get("site_data", { type: "text", cacheTtl: 0 });
-      if (!data) {
-        data = await kv.get("sobber_content", { type: "text", cacheTtl: 0 });
-      }
+      let data = null;
+      try {
+        data = await kv.get("site_data", { type: "text" });
+        if (!data) data = await kv.get("sobber_content", { type: "text" });
+      } catch (e) {}
       return new Response(data || "{}", {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });

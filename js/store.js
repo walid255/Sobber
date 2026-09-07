@@ -102,13 +102,22 @@ class ReactiveStore {
       let lastTouchSync = 0;
       window.addEventListener('touchstart', () => {
         const now = Date.now();
-        if (now - lastTouchSync > 4000) {
+        if (now - lastTouchSync > 5000) {
           lastTouchSync = now;
           this.syncFromServer();
         }
       }, { passive: true });
-      // Rapid background heartbeat sync every 3 seconds for instant multi-device replication
-      setInterval(() => this.syncFromServer(), 3000);
+      // Adaptive background heartbeat sync: rapid 4s when healthy, backed-off 12s on disconnect
+      let syncLoopTimer = null;
+      const scheduleNextSync = (delay = 4000) => {
+        if (syncLoopTimer) clearTimeout(syncLoopTimer);
+        syncLoopTimer = setTimeout(async () => {
+          await this.syncFromServer();
+          const nextDelay = this.isCloudConnected ? 4000 : 12000;
+          scheduleNextSync(nextDelay);
+        }, delay);
+      };
+      scheduleNextSync(3000);
     }
   }
 
@@ -254,14 +263,14 @@ class ReactiveStore {
 
         const remote = await res.json();
         if (remote && typeof remote === 'object') {
-          if (remote.online === false || remote.error) {
-            this.isCloudConnected = false;
-            this.cloudError = remote.message || remote.error || 'KV namespace binding missing';
-            this.emit('sync:error', { error: this.cloudError });
-          } else if (Array.isArray(remote.users)) {
+          if (Array.isArray(remote.users)) {
             this.isCloudConnected = true;
             this.cloudError = null;
             this.applyRemoteState(remote, true);
+          } else if (remote.online === false || remote.error) {
+            this.isCloudConnected = false;
+            this.cloudError = remote.message || remote.error || 'KV namespace binding missing';
+            this.emit('sync:error', { error: this.cloudError });
           }
         }
       } else {

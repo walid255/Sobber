@@ -19,6 +19,17 @@
   <!-- Dynamic Favicon -->
   <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 
+  <!-- Filter development warnings from Tailwind CDN -->
+  <script>
+    (function() {
+      const origWarn = console.warn;
+      console.warn = function(...args) {
+        if (args[0] && typeof args[0] === 'string' && (args[0].includes('cdn.tailwindcss.com') || args[0].includes('Tailwind CSS in production'))) return;
+        origWarn.apply(console, args);
+      };
+    })();
+  </script>
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -55,7 +66,7 @@
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
   <!-- Custom Medical Stylesheet & Print Styles -->
-  <link rel="stylesheet" href="css/styles.css?v=20260907-sobber11">
+  <link rel="stylesheet" href="css/styles.css?v=20260907-sobber12">
 </head>
 <body class="bg-slate-100 min-h-screen antialiased selection:bg-teal-500 selection:text-white">
 
@@ -409,23 +420,23 @@
   </div>
 
   <!-- SPA Javascript Modules Loaded in Strict Order with Cache-Busting -->
-  <script src="js/i18n.js?v=20260907-sobber11"></script>
-  <script src="js/store.js?v=20260907-sobber11"></script>
-  <script src="js/auth.js?v=20260907-sobber11"></script>
-  <script src="js/components/modal.js?v=20260907-sobber11"></script>
-  <script src="js/components/reminders.js?v=20260907-sobber11"></script>
-  <script src="js/components/pdf-generator.js?v=20260907-sobber11"></script>
-  <script src="js/admin.js?v=20260907-sobber11"></script>
-  <script src="js/views/dashboard.js?v=20260907-sobber11"></script>
-  <script src="js/views/patients.js?v=20260907-sobber11"></script>
-  <script src="js/views/medications.js?v=20260907-sobber11"></script>
-  <script src="js/views/inventory.js?v=20260907-sobber11"></script>
-  <script src="js/views/timetable.js?v=20260907-sobber11"></script>
-  <script src="js/views/certificates.js?v=20260907-sobber11"></script>
-  <script src="js/views/batch-upload.js?v=20260907-sobber11"></script>
-  <script src="js/views/payments.js?v=20260907-sobber11"></script>
-  <script src="js/views/users.js?v=20260907-sobber11"></script>
-  <script src="js/views/settings.js?v=20260907-sobber11"></script>
-  <script src="js/app.js?v=20260907-sobber11"></script>
+  <script src="js/i18n.js?v=20260907-sobber12"></script>
+  <script src="js/store.js?v=20260907-sobber12"></script>
+  <script src="js/auth.js?v=20260907-sobber12"></script>
+  <script src="js/components/modal.js?v=20260907-sobber12"></script>
+  <script src="js/components/reminders.js?v=20260907-sobber12"></script>
+  <script src="js/components/pdf-generator.js?v=20260907-sobber12"></script>
+  <script src="js/admin.js?v=20260907-sobber12"></script>
+  <script src="js/views/dashboard.js?v=20260907-sobber12"></script>
+  <script src="js/views/patients.js?v=20260907-sobber12"></script>
+  <script src="js/views/medications.js?v=20260907-sobber12"></script>
+  <script src="js/views/inventory.js?v=20260907-sobber12"></script>
+  <script src="js/views/timetable.js?v=20260907-sobber12"></script>
+  <script src="js/views/certificates.js?v=20260907-sobber12"></script>
+  <script src="js/views/batch-upload.js?v=20260907-sobber12"></script>
+  <script src="js/views/payments.js?v=20260907-sobber12"></script>
+  <script src="js/views/users.js?v=20260907-sobber12"></script>
+  <script src="js/views/settings.js?v=20260907-sobber12"></script>
+  <script src="js/app.js?v=20260907-sobber12"></script>
 </body>
 </html>

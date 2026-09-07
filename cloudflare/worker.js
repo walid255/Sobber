@@ -37,16 +37,23 @@ function isAuthorized(request, env) {
   return token === secret.trim();
 }
 
+function isKV(val, key = '') {
+  if (!val || typeof val !== 'object') return false;
+  const upper = String(key).toUpperCase();
+  if (upper === 'ASSETS' || upper === 'DB' || upper === 'BUCKET' || upper === 'CF_PAGES') return false;
+  if (typeof val.fetch === 'function') return false;
+  if (typeof val.prepare === 'function' || typeof val.exec === 'function') return false;
+  return typeof val.get === 'function' && typeof val.put === 'function' && typeof val.list === 'function';
+}
+
 function getKV(env) {
-  if (env.SOBBER_KV) return env.SOBBER_KV;
-  if (env.MY_KV_NAMESPACE) return env.MY_KV_NAMESPACE;
-  if (env.KV) return env.KV;
-  if (env.SOBER_KV) return env.SOBER_KV;
-  for (const key of Object.keys(env || {})) {
-    const val = env[key];
-    if (val && typeof val.get === 'function' && typeof val.put === 'function') {
-      return val;
-    }
+  if (!env || typeof env !== 'object') return null;
+  const candidates = [env.SOBBER_KV, env.MY_KV_NAMESPACE, env.KV, env.SOBER_KV, env.SERENITYCARE_KV];
+  for (const c of candidates) {
+    if (c && isKV(c)) return c;
+  }
+  for (const [key, val] of Object.entries(env)) {
+    if (isKV(val, key)) return val;
   }
   return null;
 }
@@ -605,8 +612,8 @@ export default {
 
           // Priority 2: Read from Cloudflare Workers KV
           if (kv) {
-            let stateData = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
-            if (!stateData) stateData = await kv.get('serenitycare_state', { type: 'text', cacheTtl: 0 });
+            let stateData = await kv.get('sobber_state', { type: 'text' });
+            if (!stateData) stateData = await kv.get('serenitycare_state', { type: 'text' });
             if (stateData) {
               return new Response(stateData, { headers: JSON_HEADERS });
             }
@@ -675,9 +682,9 @@ export default {
       if (path === '/api/content') {
         if (method === 'GET') {
           if (kv) {
-            let rawData = await kv.get('site_data', { type: 'text', cacheTtl: 0 });
-            if (!rawData) rawData = await kv.get('sobber_content', { type: 'text', cacheTtl: 0 });
-            if (!rawData) rawData = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+            let rawData = await kv.get('site_data', { type: 'text' });
+            if (!rawData) rawData = await kv.get('sobber_content', { type: 'text' });
+            if (!rawData) rawData = await kv.get('sobber_state', { type: 'text' });
             if (rawData) {
               return new Response(rawData, { headers: JSON_HEADERS });
             }
@@ -790,11 +797,11 @@ export default {
 
           // 2. Fallback to KV if D1 is empty or not configured
           if (list.length === 0 && kv) {
-            let raw = await kv.get('sobber_payments', { type: 'text', cacheTtl: 0 });
+            let raw = await kv.get('sobber_payments', { type: 'text' });
             if (raw) {
               try { list = JSON.parse(raw); } catch {}
             } else {
-              const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+              const stateRaw = await kv.get('sobber_state', { type: 'text' });
               if (stateRaw) {
                 try {
                   const s = JSON.parse(stateRaw);
@@ -861,7 +868,7 @@ export default {
           // 2. Save to KV
           if (kv) {
             let current = [];
-            const existing = await kv.get('sobber_payments', { type: 'text', cacheTtl: 0 });
+            const existing = await kv.get('sobber_payments', { type: 'text' });
             if (existing) {
               try { current = JSON.parse(existing); } catch {}
             }
@@ -873,7 +880,7 @@ export default {
             await kv.put('sobber_payments', JSON.stringify(current));
 
             // Sync with sobber_state
-            const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+            const stateRaw = await kv.get('sobber_state', { type: 'text' });
             if (stateRaw) {
               try {
                 const s = JSON.parse(stateRaw);
@@ -900,14 +907,14 @@ export default {
 
           if (kv) {
             let current = [];
-            const existing = await kv.get('sobber_payments', { type: 'text', cacheTtl: 0 });
+            const existing = await kv.get('sobber_payments', { type: 'text' });
             if (existing) {
               try { current = JSON.parse(existing); } catch {}
             }
             current = current.filter(p => p.id !== id);
             await kv.put('sobber_payments', JSON.stringify(current));
 
-            const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+            const stateRaw = await kv.get('sobber_state', { type: 'text' });
             if (stateRaw) {
               try {
                 const s = JSON.parse(stateRaw);
@@ -945,7 +952,7 @@ export default {
             } catch (e) {}
           }
           if (kv) {
-            const raw = await kv.get('sobber_users', { type: 'text', cacheTtl: 0 });
+            const raw = await kv.get('sobber_users', { type: 'text' });
             if (raw) return new Response(raw, { headers: JSON_HEADERS });
           }
           return new Response(JSON.stringify([]), { headers: JSON_HEADERS });
@@ -983,7 +990,7 @@ export default {
 
           if (kv) {
             let current = [];
-            const existing = await kv.get('sobber_users', { type: 'text', cacheTtl: 0 });
+            const existing = await kv.get('sobber_users', { type: 'text' });
             if (existing) {
               try { current = JSON.parse(existing); } catch {}
             }
@@ -994,7 +1001,7 @@ export default {
             });
             await kv.put('sobber_users', JSON.stringify(current));
 
-            const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+            const stateRaw = await kv.get('sobber_state', { type: 'text' });
             if (stateRaw) {
               try {
                 const s = JSON.parse(stateRaw);
@@ -1015,7 +1022,7 @@ export default {
           }
           if (kv) {
             let list = [];
-            const existing = await kv.get('sobber_users', { type: 'text', cacheTtl: 0 });
+            const existing = await kv.get('sobber_users', { type: 'text' });
             if (existing) {
               try { list = JSON.parse(existing); } catch {}
             }
@@ -1054,7 +1061,7 @@ export default {
             } catch (e) {}
           }
           if (kv) {
-            const raw = await kv.get('sobber_patients', { type: 'text', cacheTtl: 0 });
+            const raw = await kv.get('sobber_patients', { type: 'text' });
             if (raw) return new Response(raw, { headers: JSON_HEADERS });
           }
           return new Response(JSON.stringify([]), { headers: JSON_HEADERS });
@@ -1103,7 +1110,7 @@ export default {
 
           if (kv) {
             let list = [];
-            const existing = await kv.get('sobber_patients', { type: 'text', cacheTtl: 0 });
+            const existing = await kv.get('sobber_patients', { type: 'text' });
             if (existing) {
               try { list = JSON.parse(existing); } catch {}
             }
@@ -1114,7 +1121,7 @@ export default {
             });
             await kv.put('sobber_patients', JSON.stringify(list));
 
-            const stateRaw = await kv.get('sobber_state', { type: 'text', cacheTtl: 0 });
+            const stateRaw = await kv.get('sobber_state', { type: 'text' });
             if (stateRaw) {
               try {
                 const s = JSON.parse(stateRaw);
@@ -1135,7 +1142,7 @@ export default {
           }
           if (kv) {
             let list = [];
-            const existing = await kv.get('sobber_patients', { type: 'text', cacheTtl: 0 });
+            const existing = await kv.get('sobber_patients', { type: 'text' });
             if (existing) {
               try { list = JSON.parse(existing); } catch {}
             }
