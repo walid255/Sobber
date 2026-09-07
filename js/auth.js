@@ -134,6 +134,14 @@ class AuthService {
     return this.store.loginUser(email, password);
   }
 
+  loginAsAdmin() {
+    return this.store.forceLoginAsAdmin();
+  }
+
+  resetAdminCredentials() {
+    return this.store.resetAdminCredentials();
+  }
+
   logout() {
     if (window.AppModal) {
       window.AppModal.showAcceptanceCard({

@@ -222,6 +222,43 @@ class AppRouter {
     const pwdInput = document.getElementById('login-password');
     const emailInput = document.getElementById('login-email');
 
+    const instantAdminBtn = document.getElementById('instant-admin-login-btn');
+    const resetCredsBtn = document.getElementById('reset-credentials-btn');
+
+    // Instant 1-Click Administrator Sign-In
+    if (instantAdminBtn) {
+      instantAdminBtn.onclick = () => {
+        if (errorBox) errorBox.classList.add('hidden');
+        const res = window.Auth.loginAsAdmin();
+        if (res && res.success) {
+          if (pwdInput) pwdInput.value = '';
+          this.checkAuthAndRender();
+        } else {
+          if (errorBox && errorText) {
+            errorText.textContent = (res && res.message) || 'Failed to sign in as admin.';
+            errorBox.classList.remove('hidden');
+          }
+        }
+      };
+    }
+
+    // Emergency Workstation Credentials Reset
+    if (resetCredsBtn) {
+      resetCredsBtn.onclick = () => {
+        if (errorBox) errorBox.classList.add('hidden');
+        const res = window.Auth.resetAdminCredentials();
+        if (res && res.success) {
+          if (pwdInput) pwdInput.value = '';
+          this.checkAuthAndRender();
+        } else {
+          if (errorBox && errorText) {
+            errorText.textContent = (res && res.message) || 'Credentials reset failed.';
+            errorBox.classList.remove('hidden');
+          }
+        }
+      };
+    }
+
     // Autofill Default Production Admin Credentials
     if (autofillBtn) {
       autofillBtn.onclick = () => {
